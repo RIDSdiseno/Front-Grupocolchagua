@@ -11,7 +11,9 @@ const menuItems = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Trabajadores", path: "/trabajadores" },
   { label: "Empresas", path: "/empresas" },
+  { label: "Sucursales", path: "/sucursales" },
   { label: "Cargos", path: "/cargos" },
+  { label: "Asignaciones", path: "/asignaciones" },
   { label: "Asistencia", path: "/asistencia" },
   { label: "Liquidaciones", path: "/liquidaciones" },
 ];
@@ -29,8 +31,8 @@ export default function DashboardLayout({ children }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 lg:flex">
-      <aside className="hidden lg:flex lg:w-72 lg:flex-col bg-[#4E1743] text-white shadow-2xl">
+    <div className="min-h-screen w-full overflow-x-hidden bg-slate-100 lg:flex">
+      <aside className="hidden shrink-0 bg-[#4E1743] text-white shadow-2xl lg:flex lg:w-72 lg:flex-col">
         <div className="border-b border-white/10 p-6">
           <img
             src={logo}
@@ -50,7 +52,7 @@ export default function DashboardLayout({ children }: Props) {
                 className={`w-full rounded-xl px-4 py-3 text-left font-semibold transition-all duration-200 ${
                   activo
                     ? "bg-white text-[#4E1743] shadow-md"
-                    : "text-white/90 hover:bg-white/10 hover:translate-x-1"
+                    : "text-white/90 hover:translate-x-1 hover:bg-white/10"
                 }`}
               >
                 {item.label}
@@ -77,27 +79,30 @@ export default function DashboardLayout({ children }: Props) {
         </div>
       </aside>
 
-      <main className="flex-1">
-        <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 shadow-sm sm:px-8">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">
+      <main className="min-w-0 flex-1 overflow-x-hidden">
+        <header className="flex h-20 min-w-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-8">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-slate-800 sm:text-2xl">
               Panel de control
             </h1>
-            <p className="text-sm text-slate-500">
+
+            <p className="truncate text-sm text-slate-500">
               Bienvenido, {usuario.nombre || "Usuario"}
             </p>
           </div>
 
           <button
             onClick={logout}
-            className="rounded-xl bg-[#4E1743] px-4 py-2 font-semibold text-white transition hover:bg-[#3d1235] lg:hidden"
+            className="ml-3 shrink-0 rounded-xl bg-[#4E1743] px-4 py-2 font-semibold text-white transition hover:bg-[#3d1235] lg:hidden"
           >
             Salir
           </button>
         </header>
 
-        <section className="animate-[fadeIn_0.35s_ease-in-out] p-5 sm:p-8">
-          {children}
+        <section className="min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 lg:p-8">
+          <div className="min-w-0 max-w-full overflow-hidden">
+            {children}
+          </div>
         </section>
       </main>
     </div>

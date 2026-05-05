@@ -29,6 +29,21 @@ const initialSucursalForm: SucursalForm = {
   ciudad: "",
 };
 
+const obtenerMensajeError = (err: unknown, fallback: string) => {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "response" in err &&
+    typeof (err as { response?: { data?: { message?: unknown } } }).response
+      ?.data?.message === "string"
+  ) {
+    return (err as { response: { data: { message: string } } }).response.data
+      .message;
+  }
+
+  return fallback;
+};
+
 export default function Empresas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [form, setForm] = useState<EmpresaForm>(initialForm);
@@ -53,18 +68,34 @@ export default function Empresas() {
     ).length;
   }, [empresas]);
 
-  const cargarEmpresas = async () => {
-    try {
-      const data = await listarEmpresasRequest();
-      setEmpresas(data);
-    } catch {
-      setError("Error al cargar empresas");
-    }
-  };
-
   useEffect(() => {
-    cargarEmpresas();
+    let activo = true;
+
+    const cargarInicial = async () => {
+      try {
+        const data = await listarEmpresasRequest();
+
+        if (!activo) return;
+
+        setEmpresas(data);
+      } catch {
+        if (activo) {
+          setError("Error al cargar empresas");
+        }
+      }
+    };
+
+    void cargarInicial();
+
+    return () => {
+      activo = false;
+    };
   }, []);
+
+  const cargarEmpresas = async () => {
+    const data = await listarEmpresasRequest();
+    setEmpresas(data);
+  };
 
   const abrirCrear = () => {
     setForm(initialForm);
@@ -134,6 +165,7 @@ export default function Empresas() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     setLoading(true);
     setError("");
     setMensaje("");
@@ -149,8 +181,8 @@ export default function Empresas() {
 
       cerrarModal();
       await cargarEmpresas();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al guardar empresa");
+    } catch (err: unknown) {
+      setError(obtenerMensajeError(err, "Error al guardar empresa"));
     } finally {
       setLoading(false);
     }
@@ -177,8 +209,8 @@ export default function Empresas() {
       await crearSucursalRequest(empresaSucursal.id, sucursalForm);
       setMensaje("Sucursal creada correctamente");
       cerrarSucursalModal();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al crear sucursal");
+    } catch (err: unknown) {
+      setError(obtenerMensajeError(err, "Error al crear sucursal"));
     } finally {
       setLoading(false);
     }
@@ -189,11 +221,15 @@ export default function Empresas() {
     if (!confirmar) return;
 
     try {
+      setError("");
+      setMensaje("");
+
       await eliminarEmpresaRequest(empresa.id);
+
       setMensaje("Empresa eliminada correctamente");
       await cargarEmpresas();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al eliminar empresa");
+    } catch (err: unknown) {
+      setError(obtenerMensajeError(err, "Error al eliminar empresa"));
     }
   };
 
@@ -204,13 +240,16 @@ export default function Empresas() {
           <p className="mb-2 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
             Gestión de clientes
           </p>
+
           <h2 className="text-3xl font-black text-slate-900">Empresas</h2>
+
           <p className="mt-2 max-w-2xl text-slate-500">
             Administra empresas cliente, encargados y sucursales asociadas.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={abrirCrear}
           className="rounded-2xl bg-[#4E1743] px-6 py-4 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#3d1235]"
         >
@@ -235,9 +274,11 @@ export default function Empresas() {
           <p className="text-sm font-bold text-slate-500">
             Empresas registradas
           </p>
+
           <p className="mt-3 text-4xl font-black text-slate-900">
             {empresas.length}
           </p>
+
           <p className="mt-2 text-sm text-slate-500">
             Clientes activos en el sistema.
           </p>
@@ -247,9 +288,11 @@ export default function Empresas() {
           <p className="text-sm font-bold text-slate-500">
             Con contacto registrado
           </p>
+
           <p className="mt-3 text-4xl font-black text-slate-900">
             {empresasConContacto}
           </p>
+
           <p className="mt-2 text-sm text-slate-500">
             Empresas con encargado asociado.
           </p>
@@ -257,7 +300,9 @@ export default function Empresas() {
 
         <div className="rounded-3xl border border-slate-200 bg-[#4E1743] p-6 text-white shadow-sm">
           <p className="text-sm font-bold text-white/70">Sucursales</p>
+
           <p className="mt-3 text-4xl font-black">Por empresa</p>
+
           <p className="mt-2 text-sm text-white/70">
             Cada tarifa dependerá de la sucursal seleccionada.
           </p>
@@ -269,6 +314,7 @@ export default function Empresas() {
           <h3 className="text-lg font-black text-slate-900">
             Empresas registradas
           </h3>
+
           <p className="text-sm text-slate-500">
             Desde aquí puedes editar la empresa o crear sus sucursales.
           </p>
@@ -312,6 +358,7 @@ export default function Empresas() {
                         <p className="font-black text-slate-900">
                           {empresa.nombre}
                         </p>
+
                         <p className="text-xs text-slate-500">
                           ID #{empresa.id}
                         </p>
@@ -344,6 +391,7 @@ export default function Empresas() {
                   <td className="py-4">
                     <div className="flex justify-end gap-2">
                       <button
+                        type="button"
                         onClick={() => abrirSucursalModal(empresa)}
                         className="rounded-xl bg-[#4E1743]/10 px-4 py-2 font-bold text-[#4E1743] transition hover:bg-[#4E1743]/20"
                       >
@@ -351,6 +399,7 @@ export default function Empresas() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => editarEmpresa(empresa)}
                         className="rounded-xl bg-slate-100 px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-200"
                       >
@@ -358,6 +407,7 @@ export default function Empresas() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => eliminarEmpresa(empresa)}
                         className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100"
                       >

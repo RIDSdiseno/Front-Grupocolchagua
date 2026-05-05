@@ -6,6 +6,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Cargos from "./pages/Cargos";
 import Trabajadores from "./pages/Trabajadores";
 import Asignaciones from "./pages/Asignaciones";
+import Asistencia from "./pages/Asistencia";
+import Sucursales from "./pages/Sucursales";
 
 function App() {
   return (
@@ -54,6 +56,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Asignaciones />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/asistencia"
+          element={
+            <ProtectedRoute>
+              <Asistencia />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/sucursales"
+          element={
+            <ProtectedRoute>
+              <Sucursales />
             </ProtectedRoute>
           }
         />

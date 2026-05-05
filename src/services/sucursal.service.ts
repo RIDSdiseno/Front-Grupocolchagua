@@ -19,6 +19,13 @@ export const listarSucursalesPorEmpresaRequest = async (empresaId: number) => {
   return response.data.sucursales;
 };
 
+export const listarTodasSucursalesRequest = async () => {
+  const response = await axios.get(`${API_URL}/sucursales`, {
+    headers: getAuthHeaders(),
+  });
+  return response.data.sucursales;
+};
+
 export const crearSucursalRequest = async (
   empresaId: number,
   data: SucursalForm
@@ -26,10 +33,24 @@ export const crearSucursalRequest = async (
   const response = await axios.post(
     `${API_URL}/sucursales/empresa/${empresaId}`,
     data,
-    {
-      headers: getAuthHeaders(),
-    }
+    { headers: getAuthHeaders() }
   );
+  return response.data;
+};
 
+export const actualizarSucursalRequest = async (
+  id: number,
+  data: Partial<SucursalForm> & { activo?: boolean }
+) => {
+  const response = await axios.put(`${API_URL}/sucursales/${id}`, data, {
+    headers: getAuthHeaders(),
+  });
+  return response.data;
+};
+
+export const eliminarSucursalRequest = async (id: number) => {
+  const response = await axios.delete(`${API_URL}/sucursales/${id}`, {
+    headers: getAuthHeaders(),
+  });
   return response.data;
 };

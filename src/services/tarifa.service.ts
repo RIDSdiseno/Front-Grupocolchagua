@@ -11,6 +11,8 @@ const getAuthHeaders = () => {
   };
 };
 
+const toNumber = (value: string) => Number(value || 0);
+
 export const listarTarifasPorEmpresaRequest = async (empresaId: number) => {
   const response = await axios.get(`${API_URL}/tarifas/empresa/${empresaId}`, {
     headers: getAuthHeaders(),
@@ -28,7 +30,14 @@ export const crearTarifaEmpresaRequest = async (
     {
       sucursalId: data.sucursalId,
       cargoId: data.cargoId,
-      pagoPorHora: Number(data.pagoPorHora),
+
+      sueldoBase: toNumber(data.sueldoBase),
+      bonoColacion: toNumber(data.bonoColacion),
+      bonoLocomocion: toNumber(data.bonoLocomocion),
+      bonoAsistencia: toNumber(data.bonoAsistencia),
+      bonoNoche: toNumber(data.bonoNoche),
+      otrosBonos: toNumber(data.otrosBonos),
+      valorHoraExtra: toNumber(data.valorHoraExtra),
     },
     {
       headers: getAuthHeaders(),
@@ -47,7 +56,14 @@ export const actualizarTarifaRequest = async (
     {
       sucursalId: data.sucursalId,
       cargoId: data.cargoId,
-      pagoPorHora: Number(data.pagoPorHora),
+
+      sueldoBase: toNumber(data.sueldoBase),
+      bonoColacion: toNumber(data.bonoColacion),
+      bonoLocomocion: toNumber(data.bonoLocomocion),
+      bonoAsistencia: toNumber(data.bonoAsistencia),
+      bonoNoche: toNumber(data.bonoNoche),
+      otrosBonos: toNumber(data.otrosBonos),
+      valorHoraExtra: toNumber(data.valorHoraExtra),
     },
     {
       headers: getAuthHeaders(),

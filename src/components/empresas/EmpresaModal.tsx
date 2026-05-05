@@ -2,7 +2,15 @@ import PhoneInputModule from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import type { Empresa, EmpresaForm } from "../../types/empresa";
 
-const PhoneInput = (PhoneInputModule as any).default || PhoneInputModule;
+/**
+ * Tipado correcto para evitar `any`
+ */
+type PhoneInputModuleType = typeof PhoneInputModule & {
+  default?: typeof PhoneInputModule;
+};
+
+const PhoneInput =
+  (PhoneInputModule as PhoneInputModuleType).default || PhoneInputModule;
 
 interface Props {
   open: boolean;
@@ -37,24 +45,36 @@ export default function EmpresaModal({
 }: Props) {
   if (!open) return null;
 
+  /**
+   * RUT formateado
+   */
   const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valorFormateado = formatearRutInput(e.target.value);
 
-    onChange({
+    const syntheticEvent: React.ChangeEvent<HTMLInputElement> = {
+      ...e,
       target: {
+        ...e.target,
         name: "rut",
         value: valorFormateado,
       },
-    } as React.ChangeEvent<HTMLInputElement>);
+    };
+
+    onChange(syntheticEvent);
   };
 
+  /**
+   * Teléfono (PhoneInput)
+   */
   const handleTelefonoChange = (value: string) => {
-    onChange({
+    const syntheticEvent = {
       target: {
         name: "encargadoTelefono",
         value: value ? `+${value}` : "",
       },
-    } as React.ChangeEvent<HTMLInputElement>);
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+    onChange(syntheticEvent);
   };
 
   return (
@@ -75,6 +95,7 @@ export default function EmpresaModal({
         </div>
 
         <form onSubmit={onSubmit} className="p-6">
+          {/* DATOS EMPRESA */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Datos de la empresa
@@ -95,7 +116,7 @@ export default function EmpresaModal({
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="mb-4">
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Alias
                 </label>
@@ -109,7 +130,7 @@ export default function EmpresaModal({
                 />
               </div>
 
-              <div className="mb-4">
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   RUT
                 </label>
@@ -126,6 +147,7 @@ export default function EmpresaModal({
             </div>
           </div>
 
+          {/* CONTACTO */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Contacto encargado
@@ -145,7 +167,7 @@ export default function EmpresaModal({
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="mb-4">
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Correo encargado
                 </label>
@@ -159,7 +181,7 @@ export default function EmpresaModal({
                 />
               </div>
 
-              <div className="mb-4">
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Teléfono encargado
                 </label>
@@ -170,28 +192,22 @@ export default function EmpresaModal({
                   onChange={handleTelefonoChange}
                   inputProps={{
                     name: "encargadoTelefono",
-                    required: false,
                   }}
                   enableSearch
-                  searchPlaceholder="Buscar país"
                   placeholder="+56 9 1234 5678"
                   containerClass="!w-full"
                   inputClass="!h-[50px] !w-full !rounded-xl !border !border-slate-300 !pl-14 !text-sm !outline-none focus:!border-[#4E1743] focus:!ring-2 focus:!ring-[#4E1743]/20"
-                  buttonClass="!rounded-l-xl !border-slate-300 !bg-white hover:!bg-slate-50"
-                  dropdownClass="!text-sm"
                 />
               </div>
             </div>
           </div>
 
+          {/* LOGO */}
           <div className="mb-6">
-            <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
-              Logo
-            </h4>
-
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Logo / Foto
+              Logo
             </label>
+
             <input
               name="foto"
               type="file"
@@ -209,11 +225,12 @@ export default function EmpresaModal({
             )}
           </div>
 
-          <div className="sticky bottom-0 -mx-6 -mb-6 flex gap-3 border-t bg-white p-6">
+          {/* FOOTER */}
+          <div className="flex gap-3 border-t pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
+              className="flex-1 rounded-xl border px-4 py-3 font-semibold"
             >
               Cancelar
             </button>
@@ -221,7 +238,7 @@ export default function EmpresaModal({
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-xl bg-[#4E1743] px-4 py-3 font-bold text-white hover:bg-[#3d1235] disabled:opacity-60"
+              className="flex-1 rounded-xl bg-[#4E1743] px-4 py-3 font-bold text-white"
             >
               {loading ? "Guardando..." : editando ? "Actualizar" : "Crear"}
             </button>
