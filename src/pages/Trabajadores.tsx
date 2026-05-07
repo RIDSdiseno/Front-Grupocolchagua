@@ -88,7 +88,9 @@ export default function Trabajadores() {
         id: item.Empresa.id,
         nombre: item.Empresa.nombre,
         rut: item.Empresa.rut,
-        Sucursal: item.Empresa.Sucursal || [],
+        Sucursal: (item.Empresa.Sucursal || []).filter(
+          (s) => s.holdingId === Number(idHolding)
+        ),
       }));
 
       setEmpresas(empresasDelHolding);

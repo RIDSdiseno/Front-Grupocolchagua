@@ -15,18 +15,20 @@ import {
   type Holding,
 } from "../services/Holding.service";
 
+interface SucursalOption {
+  id: number;
+  nombre: string;
+  empresaId: number;
+  holdingId: number;
+  comuna?: string | null;
+  ciudad?: string | null;
+}
+
 interface EmpresaOption {
   id: number;
   nombre: string;
   rut?: string | null;
   Sucursal: SucursalOption[];
-}
-
-interface SucursalOption {
-  id: number;
-  nombre: string;
-  comuna?: string | null;
-  ciudad?: string | null;
 }
 
 const ESTADO_CONFIG: Record<string, { bg: string; text: string; label: string }> =
@@ -109,8 +111,15 @@ export default function Asistencia() {
   const [celdaFecha, setCeldaFecha] = useState("");
   const [celdaRegistro, setCeldaRegistro] = useState<Asistencia | null>(null);
 
-  const asignacionesVisibles = holdingId && empresaId && sucursalId ? asignaciones : [];
-  const registrosVisibles = holdingId && empresaId && sucursalId ? registros : [];
+  const asignacionesVisibles = useMemo(() => {
+    if (!holdingId || !empresaId || !sucursalId) return [];
+    return asignaciones;
+  }, [holdingId, empresaId, sucursalId, asignaciones]);
+
+  const registrosVisibles = useMemo(() => {
+    if (!holdingId || !empresaId || !sucursalId) return [];
+    return registros;
+  }, [holdingId, empresaId, sucursalId, registros]);
 
   useEffect(() => {
     let activo = true;
@@ -240,7 +249,9 @@ export default function Asistencia() {
         id: item.Empresa.id,
         nombre: item.Empresa.nombre,
         rut: item.Empresa.rut,
-        Sucursal: item.Empresa.Sucursal || [],
+        Sucursal: (item.Empresa.Sucursal || []).filter(
+          (s) => s.holdingId === Number(value)
+        ),
       }));
 
       setEmpresas(empresasDelHolding);
