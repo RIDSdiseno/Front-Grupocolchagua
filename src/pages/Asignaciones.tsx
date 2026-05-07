@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { AxiosError } from "axios";
 import DashboardLayout from "../layouts/DashboardLayout";
 import AsignacionModal from "../components/asignaciones/AsignacionModal";
 import type { Asignacion, AsignacionForm } from "../types/asignacion";
@@ -26,6 +27,7 @@ const initialForm: AsignacionForm = {
 
 const formatFecha = (fecha: string | null | undefined) => {
   if (!fecha) return "Indefinido";
+
   return new Date(fecha).toLocaleDateString("es-CL", {
     day: "2-digit",
     month: "2-digit",
@@ -37,6 +39,11 @@ const formatFecha = (fecha: string | null | undefined) => {
 const esActiva = (a: Asignacion) => {
   if (!a.fechaFin) return true;
   return new Date(a.fechaFin) >= new Date(new Date().toDateString());
+};
+
+const obtenerMensajeError = (error: unknown, fallback: string) => {
+  const axiosError = error as AxiosError<{ message?: string }>;
+  return axiosError.response?.data?.message || fallback;
 };
 
 export default function Asignaciones() {
@@ -53,7 +60,9 @@ export default function Asignaciones() {
   const [error, setError] = useState("");
 
   const [filtroEmpresa, setFiltroEmpresa] = useState<number | "">("");
-  const [filtroEstado, setFiltroEstado] = useState<"todas" | "activas" | "vencidas">("todas");
+  const [filtroEstado, setFiltroEstado] = useState<
+    "todas" | "activas" | "vencidas"
+  >("todas");
 
   const cargarDatos = async () => {
     try {
@@ -63,27 +72,54 @@ export default function Asignaciones() {
         listarEmpresasRequest(),
         listarCargosRequest(),
       ]);
+
       setAsignaciones(asig);
       setTrabajadores(trabs);
       setEmpresas(emps);
       setCargos(carg);
-    } catch {
-      setError("Error al cargar los datos");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al cargar los datos"));
     }
   };
 
   useEffect(() => {
-    cargarDatos();
+    let activo = true;
+
+    void Promise.all([
+      listarAsignacionesRequest(),
+      listarTrabajadoresRequest(),
+      listarEmpresasRequest(),
+      listarCargosRequest(),
+    ])
+      .then(([asig, trabs, emps, carg]) => {
+        if (!activo) return;
+
+        setAsignaciones(asig);
+        setTrabajadores(trabs);
+        setEmpresas(emps);
+        setCargos(carg);
+      })
+      .catch((err) => {
+        if (activo) {
+          setError(obtenerMensajeError(err, "Error al cargar los datos"));
+        }
+      });
+
+    return () => {
+      activo = false;
+    };
   }, []);
 
   const asignacionesFiltradas = useMemo(() => {
     return asignaciones.filter((a) => {
       const coincideEmpresa = !filtroEmpresa || a.empresaId === filtroEmpresa;
       const activa = esActiva(a);
+
       const coincideEstado =
         filtroEstado === "todas" ||
         (filtroEstado === "activas" && activa) ||
         (filtroEstado === "vencidas" && !activa);
+
       return coincideEmpresa && coincideEstado;
     });
   }, [asignaciones, filtroEmpresa, filtroEstado]);
@@ -122,7 +158,10 @@ export default function Asignaciones() {
     setModalOpen(true);
   };
 
-  const handleChange = (name: keyof AsignacionForm, value: number | string | "") => {
+  const handleChange = (
+    name: keyof AsignacionForm,
+    value: number | string | ""
+  ) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -140,10 +179,11 @@ export default function Asignaciones() {
         await crearAsignacionRequest(form);
         setMensaje("Asignación creada correctamente");
       }
+
       cerrarModal();
       await cargarDatos();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al guardar asignación");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al guardar asignación"));
     } finally {
       setLoading(false);
     }
@@ -153,14 +193,15 @@ export default function Asignaciones() {
     const confirmar = confirm(
       `¿Eliminar la asignación de ${a.Trabajador.apellido}, ${a.Trabajador.nombre} en ${a.Empresa.nombre}?`
     );
+
     if (!confirmar) return;
 
     try {
       await eliminarAsignacionRequest(a.id);
       setMensaje("Asignación eliminada correctamente");
       await cargarDatos();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al eliminar asignación");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al eliminar asignación"));
     }
   };
 
@@ -173,7 +214,8 @@ export default function Asignaciones() {
           </p>
           <h2 className="text-3xl font-black text-slate-900">Asignaciones</h2>
           <p className="mt-2 max-w-2xl text-slate-500">
-            Vincula trabajadores a empresas, sucursales y cargos por período.
+            Vincula trabajadores a holdings, empresas, sucursales y cargos por
+            período.
           </p>
         </div>
 
@@ -203,13 +245,19 @@ export default function Asignaciones() {
           <p className="mt-3 text-4xl font-black text-slate-900">
             {asignaciones.length}
           </p>
-          <p className="mt-2 text-sm text-slate-500">Registradas en el sistema.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Registradas en el sistema.
+          </p>
         </div>
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-bold text-slate-500">Activas</p>
-          <p className="mt-3 text-4xl font-black text-slate-900">{totalActivas}</p>
-          <p className="mt-2 text-sm text-slate-500">En curso o sin fecha de término.</p>
+          <p className="mt-3 text-4xl font-black text-slate-900">
+            {totalActivas}
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            En curso o sin fecha de término.
+          </p>
         </div>
 
         <div className="rounded-3xl border border-slate-200 bg-[#4E1743] p-6 text-white shadow-sm">
@@ -217,7 +265,9 @@ export default function Asignaciones() {
           <p className="mt-3 text-4xl font-black">
             {asignaciones.length - totalActivas}
           </p>
-          <p className="mt-2 text-sm text-white/70">Con fecha de término pasada.</p>
+          <p className="mt-2 text-sm text-white/70">
+            Con fecha de término pasada.
+          </p>
         </div>
       </div>
 
@@ -242,6 +292,7 @@ export default function Asignaciones() {
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
             >
               <option value="">Todas las empresas</option>
+
               {empresas.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.nombre}
@@ -281,6 +332,7 @@ export default function Asignaciones() {
             <tbody>
               {asignacionesFiltradas.map((a) => {
                 const activa = esActiva(a);
+
                 return (
                   <tr
                     key={a.id}
@@ -292,11 +344,14 @@ export default function Asignaciones() {
                           {a.Trabajador.nombre.charAt(0)}
                           {a.Trabajador.apellido.charAt(0)}
                         </div>
+
                         <div>
                           <p className="font-black text-slate-900">
                             {a.Trabajador.apellido}, {a.Trabajador.nombre}
                           </p>
-                          <p className="text-xs text-slate-400">{a.Trabajador.rut}</p>
+                          <p className="text-xs text-slate-400">
+                            {a.Trabajador.rut}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -345,6 +400,7 @@ export default function Asignaciones() {
                         >
                           Editar
                         </button>
+
                         <button
                           onClick={() => eliminarAsignacion(a)}
                           className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100"
@@ -377,7 +433,6 @@ export default function Asignaciones() {
         editando={editando}
         form={form}
         trabajadores={trabajadores}
-        empresas={empresas}
         cargos={cargos}
         onClose={cerrarModal}
         onChange={handleChange}

@@ -28,7 +28,6 @@ interface Props {
   editando: Asignacion | null;
   form: AsignacionForm;
   trabajadores: Trabajador[];
-  empresas: EmpresaOption[];
   cargos: Cargo[];
   onClose: () => void;
   onChange: (name: keyof AsignacionForm, value: number | string | "") => void;
