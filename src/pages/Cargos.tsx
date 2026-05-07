@@ -3,7 +3,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import CrearCargoModal from "../components/cargos/CrearCargoModal";
 import AsociarCargoModal from "../components/cargos/AsociarCargoModal";
 import CrearSucursalModal from "../components/sucursal/CrearSucursalModal";
-import type { Empresa } from "../types/empresa";
+import type { Empresa, Holding } from "../types/empresa";
 import type { Cargo } from "../types/cargo";
 import type { Tarifa, TarifaForm } from "../types/tarifa";
 import type { Sucursal, SucursalForm } from "../types/sucursal";
@@ -19,6 +19,7 @@ import {
   eliminarTarifaRequest,
   listarTarifasPorEmpresaRequest,
 } from "../services/tarifa.service";
+import { listarHoldingsRequest } from "../services/Holding.service";
 
 const formatearCLP = (valor: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -47,6 +48,7 @@ const formSucursalInicial: SucursalForm = {
   direccion: "",
   comuna: "",
   ciudad: "",
+  holdingId: "",
 };
 
 const tarifaFormInicial: TarifaForm = {
@@ -61,32 +63,30 @@ const tarifaFormInicial: TarifaForm = {
   valorHoraExtra: "",
 };
 
-const calcularTotalMensual = (tarifa: Tarifa) => {
-  return (
-    Number(tarifa.sueldoBase || 0) +
-    Number(tarifa.bonoColacion || 0) +
-    Number(tarifa.bonoLocomocion || 0) +
-    Number(tarifa.bonoAsistencia || 0) +
-    Number(tarifa.bonoNoche || 0) +
-    Number(tarifa.otrosBonos || 0)
-  );
-};
+const calcularTotalMensual = (tarifa: Tarifa) =>
+  Number(tarifa.sueldoBase || 0) +
+  Number(tarifa.bonoColacion || 0) +
+  Number(tarifa.bonoLocomocion || 0) +
+  Number(tarifa.bonoAsistencia || 0) +
+  Number(tarifa.bonoNoche || 0) +
+  Number(tarifa.otrosBonos || 0);
 
-const calcularTotalBonos = (tarifa: Tarifa) => {
-  return (
-    Number(tarifa.bonoColacion || 0) +
-    Number(tarifa.bonoLocomocion || 0) +
-    Number(tarifa.bonoAsistencia || 0) +
-    Number(tarifa.bonoNoche || 0) +
-    Number(tarifa.otrosBonos || 0)
-  );
-};
+const calcularTotalBonos = (tarifa: Tarifa) =>
+  Number(tarifa.bonoColacion || 0) +
+  Number(tarifa.bonoLocomocion || 0) +
+  Number(tarifa.bonoAsistencia || 0) +
+  Number(tarifa.bonoNoche || 0) +
+  Number(tarifa.otrosBonos || 0);
 
 export default function Cargos() {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [cargos, setCargos] = useState<Cargo[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+
+  const [holdingId, setHoldingId] = useState<number | "">("");
   const [empresaId, setEmpresaId] = useState<number | "">("");
+  const [sucursalId, setSucursalId] = useState<number | "">("");
   const [tarifas, setTarifas] = useState<Tarifa[]>([]);
   const [tarifaForm, setTarifaForm] = useState<TarifaForm>(tarifaFormInicial);
 
@@ -103,69 +103,95 @@ export default function Cargos() {
   const [formSucursal, setFormSucursal] =
     useState<SucursalForm>(formSucursalInicial);
 
-  const empresaSeleccionada = useMemo(() => {
-    if (!empresaId) return null;
-    return empresas.find((empresa) => empresa.id === Number(empresaId)) || null;
-  }, [empresas, empresaId]);
+  const empresasDelHolding = useMemo(() => {
+    if (!holdingId) return empresas;
 
-  const opcionesCargos = useMemo(() => {
-    return cargos.map((cargo) => ({
-      value: cargo.id,
-      label: cargo.nombre,
-    }));
-  }, [cargos]);
+    return empresas.filter((empresa) =>
+      empresa.holdings?.some(
+        (relacion) => relacion.Holding.id === Number(holdingId)
+      )
+    );
+  }, [empresas, holdingId]);
 
-  const opcionesSucursales = useMemo(() => {
-    return sucursales.map((sucursal) => ({
-      value: sucursal.id,
-      label: sucursal.nombre,
-    }));
-  }, [sucursales]);
+  const holdingActual = useMemo(
+    () => holdings.find((h) => h.id === Number(holdingId)) || null,
+    [holdings, holdingId]
+  );
+
+  const empresaSeleccionada = useMemo(
+    () => empresas.find((e) => e.id === Number(empresaId)) || null,
+    [empresas, empresaId]
+  );
+
+  const sucursalSeleccionada = useMemo(
+    () => sucursales.find((s) => s.id === Number(sucursalId)) || null,
+    [sucursales, sucursalId]
+  );
+
+  const tarifasFiltradas = useMemo(() => {
+    const sucursalIdsDelHolding = sucursales.map((s) => s.id);
+
+    let data = tarifas.filter((tarifa) =>
+      sucursalIdsDelHolding.includes(tarifa.sucursalId)
+    );
+
+    if (sucursalId) {
+      data = data.filter((tarifa) => tarifa.sucursalId === Number(sucursalId));
+    }
+
+    return data;
+  }, [tarifas, sucursales, sucursalId]);
+
+  const opcionesCargos = useMemo(
+    () => cargos.map((c) => ({ value: c.id, label: c.nombre })),
+    [cargos]
+  );
+
+  const opcionesSucursales = useMemo(
+    () => sucursales.map((s) => ({ value: s.id, label: s.nombre })),
+    [sucursales]
+  );
 
   const promedioSueldoBase = useMemo(() => {
-    if (tarifas.length === 0) return 0;
+    if (!tarifasFiltradas.length) return 0;
 
-    const total = tarifas.reduce(
-      (acc, tarifa) => acc + Number(tarifa.sueldoBase || 0),
-      0
+    return Math.round(
+      tarifasFiltradas.reduce((acc, t) => acc + Number(t.sueldoBase || 0), 0) /
+        tarifasFiltradas.length
     );
-
-    return Math.round(total / tarifas.length);
-  }, [tarifas]);
+  }, [tarifasFiltradas]);
 
   const promedioTotalMensual = useMemo(() => {
-    if (tarifas.length === 0) return 0;
+    if (!tarifasFiltradas.length) return 0;
 
-    const total = tarifas.reduce(
-      (acc, tarifa) => acc + calcularTotalMensual(tarifa),
-      0
+    return Math.round(
+      tarifasFiltradas.reduce((acc, t) => acc + calcularTotalMensual(t), 0) /
+        tarifasFiltradas.length
     );
-
-    return Math.round(total / tarifas.length);
-  }, [tarifas]);
+  }, [tarifasFiltradas]);
 
   useEffect(() => {
     let activo = true;
 
     void (async () => {
       try {
-        const [empresasData, cargosData] = await Promise.all([
+        const [holdingsData, empresasData, cargosData] = await Promise.all([
+          listarHoldingsRequest(),
           listarEmpresasRequest(),
           listarCargosRequest(),
         ]);
 
         if (!activo) return;
 
+        setHoldings(holdingsData);
         setEmpresas(empresasData);
         setCargos(cargosData);
 
-        if (empresasData.length > 0) {
-          setEmpresaId(empresasData[0].id);
+        if (holdingsData.length > 0) {
+          setHoldingId(holdingsData[0].id);
         }
       } catch {
-        if (activo) {
-          setError("Error al cargar datos iniciales");
-        }
+        if (activo) setError("Error al cargar datos iniciales");
       }
     })();
 
@@ -175,7 +201,7 @@ export default function Cargos() {
   }, []);
 
   useEffect(() => {
-    if (!empresaId) return;
+    if (!empresaId || !holdingId) return;
 
     let activo = true;
 
@@ -185,13 +211,20 @@ export default function Cargos() {
 
         const [tarifasData, sucursalesData] = await Promise.all([
           listarTarifasPorEmpresaRequest(Number(empresaId)),
-          listarSucursalesPorEmpresaRequest(Number(empresaId)),
+          listarSucursalesPorEmpresaRequest(
+            Number(empresaId),
+            Number(holdingId)
+          ),
         ]);
 
         if (!activo) return;
 
         setTarifas(tarifasData);
         setSucursales(sucursalesData);
+
+        if (sucursalesData.length === 1) {
+          setSucursalId(sucursalesData[0].id);
+        }
       } catch {
         if (activo) {
           setError("Error al cargar datos de la empresa");
@@ -199,33 +232,35 @@ export default function Cargos() {
           setSucursales([]);
         }
       } finally {
-        if (activo) {
-          setLoadingTarifas(false);
-        }
+        if (activo) setLoadingTarifas(false);
       }
     })();
 
     return () => {
       activo = false;
     };
-  }, [empresaId]);
+  }, [empresaId, holdingId]);
 
   const cargarCargos = async () => {
-    const data = await listarCargosRequest();
-    setCargos(data);
+    setCargos(await listarCargosRequest());
   };
 
-  const cargarSucursales = async (idEmpresa: number) => {
-    const data = await listarSucursalesPorEmpresaRequest(idEmpresa);
-    setSucursales(data);
+  const cargarSucursales = async (id: number) => {
+    if (!holdingId) {
+      setSucursales([]);
+      return;
+    }
+
+    setSucursales(
+      await listarSucursalesPorEmpresaRequest(id, Number(holdingId))
+    );
   };
 
-  const cargarTarifas = async (idEmpresa: number) => {
+  const cargarTarifas = async (id: number) => {
     setLoadingTarifas(true);
 
     try {
-      const data = await listarTarifasPorEmpresaRequest(idEmpresa);
-      setTarifas(data);
+      setTarifas(await listarTarifasPorEmpresaRequest(id));
     } finally {
       setLoadingTarifas(false);
     }
@@ -237,8 +272,35 @@ export default function Cargos() {
     setModalAsociarOpen(false);
   };
 
+  const handleHoldingChange = (id: number) => {
+    setHoldingId(id);
+    setEmpresaId("");
+    setSucursalId("");
+    setTarifas([]);
+    setSucursales([]);
+    setTarifaForm(tarifaFormInicial);
+    setEditando(null);
+    setMensaje("");
+    setError("");
+    setFormSucursal({
+      ...formSucursalInicial,
+      holdingId: id,
+    });
+  };
+
   const handleEmpresaChange = (value: string) => {
     setEmpresaId(value ? Number(value) : "");
+    setSucursalId("");
+    setTarifas([]);
+    setSucursales([]);
+    setTarifaForm(tarifaFormInicial);
+    setEditando(null);
+    setMensaje("");
+    setError("");
+  };
+
+  const handleSucursalChange = (value: string) => {
+    setSucursalId(value ? Number(value) : "");
     setTarifaForm(tarifaFormInicial);
     setEditando(null);
     setMensaje("");
@@ -246,7 +308,10 @@ export default function Cargos() {
   };
 
   const abrirAsociar = () => {
-    setTarifaForm(tarifaFormInicial);
+    setTarifaForm({
+      ...tarifaFormInicial,
+      sucursalId: sucursalId !== "" ? sucursalId : "",
+    });
     setEditando(null);
     setMensaje("");
     setError("");
@@ -255,7 +320,6 @@ export default function Cargos() {
 
   const editarTarifa = (tarifa: Tarifa) => {
     setEditando(tarifa);
-
     setTarifaForm({
       sucursalId: tarifa.sucursalId,
       cargoId: tarifa.cargoId,
@@ -267,7 +331,6 @@ export default function Cargos() {
       otrosBonos: String(tarifa.otrosBonos || ""),
       valorHoraExtra: String(tarifa.valorHoraExtra || ""),
     });
-
     setMensaje("");
     setError("");
     setModalAsociarOpen(true);
@@ -277,19 +340,14 @@ export default function Cargos() {
     field: keyof TarifaForm,
     value: string | number | ""
   ) => {
-    setTarifaForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setTarifaForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSucursalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSucursalFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-
-    setFormSucursal((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormSucursal((prev) => ({ ...prev, [name]: value }));
   };
 
   const crearNuevoCargo = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -305,7 +363,9 @@ export default function Cargos() {
       setError("");
       setMensaje("");
 
-      const response = await crearCargoRequest({ nombre: nuevoCargo.trim() });
+      const response = await crearCargoRequest({
+        nombre: nuevoCargo.trim(),
+      });
 
       await cargarCargos();
 
@@ -319,7 +379,7 @@ export default function Cargos() {
       setNuevoCargo("");
       setModalCargoOpen(false);
       setMensaje("Cargo creado correctamente");
-    } catch (err: unknown) {
+    } catch (err) {
       setError(obtenerMensajeError(err, "Error al crear cargo"));
     } finally {
       setLoading(false);
@@ -334,6 +394,11 @@ export default function Cargos() {
       return;
     }
 
+    if (!holdingId) {
+      setError("Debes seleccionar un holding");
+      return;
+    }
+
     if (!formSucursal.nombre.trim()) {
       setError("Debes ingresar el nombre de la sucursal");
       return;
@@ -344,10 +409,10 @@ export default function Cargos() {
       setError("");
       setMensaje("");
 
-      const response = await crearSucursalRequest(
-        Number(empresaId),
-        formSucursal
-      );
+      const response = await crearSucursalRequest(Number(empresaId), {
+        ...formSucursal,
+        holdingId: Number(holdingId),
+      });
 
       await cargarSucursales(Number(empresaId));
 
@@ -356,12 +421,16 @@ export default function Cargos() {
           ...prev,
           sucursalId: response.sucursal.id,
         }));
+        setSucursalId(response.sucursal.id);
       }
 
-      setFormSucursal(formSucursalInicial);
+      setFormSucursal({
+        ...formSucursalInicial,
+        holdingId: Number(holdingId),
+      });
       setModalSucursalOpen(false);
       setMensaje("Sucursal creada correctamente");
-    } catch (err: unknown) {
+    } catch (err) {
       setError(obtenerMensajeError(err, "Error al crear sucursal"));
     } finally {
       setLoading(false);
@@ -406,7 +475,7 @@ export default function Cargos() {
 
       limpiarFormulario();
       await cargarTarifas(Number(empresaId));
-    } catch (err: unknown) {
+    } catch (err) {
       setError(obtenerMensajeError(err, "Error al guardar tarifa"));
     } finally {
       setLoading(false);
@@ -415,9 +484,9 @@ export default function Cargos() {
 
   const eliminarTarifa = async (tarifa: Tarifa) => {
     const confirmar = confirm(
-      `¿Eliminar la tarifa de ${tarifa.Cargo?.nombre || "este cargo"} en ${
-        tarifa.Sucursal?.nombre || "esta sucursal"
-      }?`
+      `¿Eliminar la tarifa de ${
+        tarifa.Cargo?.nombre || "este cargo"
+      } en ${tarifa.Sucursal?.nombre || "esta sucursal"}?`
     );
 
     if (!confirmar || !empresaId) return;
@@ -427,10 +496,9 @@ export default function Cargos() {
       setMensaje("");
 
       await eliminarTarifaRequest(tarifa.id);
-
       setMensaje("Tarifa eliminada correctamente");
       await cargarTarifas(Number(empresaId));
-    } catch (err: unknown) {
+    } catch (err) {
       setError(obtenerMensajeError(err, "Error al eliminar tarifa"));
     }
   };
@@ -442,11 +510,9 @@ export default function Cargos() {
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#4E1743] sm:text-sm">
             Configuración operacional
           </p>
-
           <h2 className="text-2xl font-black text-slate-900 sm:text-3xl">
             Tarifas por sucursal
           </h2>
-
           <p className="mt-2 max-w-2xl text-sm text-slate-500 sm:text-base">
             Define sueldo base, bonos y valor de hora extra según empresa,
             sucursal y cargo.
@@ -463,55 +529,116 @@ export default function Cargos() {
       </div>
 
       {mensaje && (
-        <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 sm:px-5 sm:py-4">
+        <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
           {mensaje}
         </div>
       )}
 
       {error && (
-        <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 sm:px-5 sm:py-4">
+        <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:gap-5">
+      <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <h3 className="mb-4 text-base font-black text-slate-900">
+          Grupo empresarial
+        </h3>
+
+        <div className="flex flex-wrap gap-3">
+          {holdings.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              onClick={() => handleHoldingChange(h.id)}
+              className={`rounded-2xl px-6 py-3 font-bold transition ${
+                holdingId === h.id
+                  ? "bg-[#4E1743] text-white shadow-lg"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {h.nombre}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:gap-5">
         <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-base font-black text-slate-900 sm:text-lg">
-                Selección de empresa
+                Selección de empresa y sucursal
               </h3>
-
               <p className="text-sm text-slate-500">
                 Las tarifas se configuran por sucursal y cargo.
               </p>
             </div>
 
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#4E1743]/10 text-base font-black text-[#4E1743] sm:h-12 sm:w-12 sm:text-lg">
-              {empresas.length}
+              {empresasDelHolding.length}
             </div>
           </div>
 
-          <label className="mb-2 block text-sm font-semibold text-slate-700">
-            Empresa cliente
-          </label>
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Empresa cliente
+              {holdingActual && (
+                <span className="ml-1 text-[#4E1743]">
+                  · {holdingActual.nombre}
+                </span>
+              )}
+            </label>
 
-          <select
-            value={empresaId}
-            onChange={(e) => handleEmpresaChange(e.target.value)}
-            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#4E1743] focus:ring-4 focus:ring-[#4E1743]/10 sm:text-base"
-          >
-            <option value="">Selecciona una empresa</option>
-
-            {empresas.map((empresa) => (
-              <option key={empresa.id} value={empresa.id}>
-                {empresa.nombre} {empresa.rut ? `- ${empresa.rut}` : ""}
-              </option>
-            ))}
-          </select>
+            {!holdingId ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                Selecciona un grupo empresarial primero.
+              </div>
+            ) : (
+              <select
+                value={empresaId}
+                onChange={(e) => handleEmpresaChange(e.target.value)}
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#4E1743] focus:ring-4 focus:ring-[#4E1743]/10 sm:text-base"
+              >
+                <option value="">Selecciona una empresa</option>
+                {empresasDelHolding.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre} {e.rut ? `- ${e.rut}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {empresaSeleccionada && (
-            <div className="mt-5 rounded-2xl bg-slate-50 p-4 sm:p-5">
+            <div className="mb-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Sucursal
+              </label>
+
+              {sucursales.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Esta empresa no tiene sucursales registradas en este holding.
+                </div>
+              ) : (
+                <select
+                  value={sucursalId}
+                  onChange={(e) => handleSucursalChange(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#4E1743] focus:ring-4 focus:ring-[#4E1743]/10 sm:text-base"
+                >
+                  <option value="">Todas las sucursales</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {empresaSeleccionada && (
+            <div className="mt-2 rounded-2xl bg-slate-50 p-4 sm:p-5">
               <div className="flex items-center gap-3 sm:gap-4">
                 {empresaSeleccionada.logoUrl ? (
                   <img
@@ -528,6 +655,11 @@ export default function Cargos() {
                 <div className="min-w-0">
                   <p className="truncate text-base font-black text-slate-900 sm:text-lg">
                     {empresaSeleccionada.nombre}
+                    {sucursalSeleccionada && (
+                      <span className="ml-2 text-sm font-semibold text-[#4E1743]">
+                        · {sucursalSeleccionada.nombre}
+                      </span>
+                    )}
                   </p>
 
                   <p className="truncate text-xs text-slate-500 sm:text-sm">
@@ -545,13 +677,13 @@ export default function Cargos() {
             <p className="text-sm font-bold text-slate-500">
               Tarifas configuradas
             </p>
-
             <p className="mt-3 text-3xl font-black text-slate-900 sm:text-4xl">
-              {tarifas.length}
+              {tarifasFiltradas.length}
             </p>
-
             <p className="mt-2 text-sm text-slate-500">
-              Por sucursal y cargo.
+              {sucursalSeleccionada
+                ? `En ${sucursalSeleccionada.nombre}`
+                : "Por sucursal y cargo."}
             </p>
           </div>
 
@@ -559,14 +691,11 @@ export default function Cargos() {
             <p className="text-sm font-bold text-slate-500">
               Promedio total mensual
             </p>
-
             <p className="mt-3 break-words text-2xl font-black text-slate-900 sm:text-3xl lg:text-4xl">
               {formatearCLP(promedioTotalMensual)}
             </p>
-
             <p className="mt-2 text-sm text-slate-500">
-              Sueldo base + bonos. Base promedio:{" "}
-              {formatearCLP(promedioSueldoBase)}.
+              Base promedio: {formatearCLP(promedioSueldoBase)}.
             </p>
           </div>
         </div>
@@ -588,31 +717,44 @@ export default function Cargos() {
         <div className="mb-5">
           <h3 className="text-base font-black text-slate-900 sm:text-lg">
             Tarifas
-            {empresaSeleccionada ? ` de ${empresaSeleccionada.nombre}` : ""}
+            {sucursalSeleccionada
+              ? ` de ${sucursalSeleccionada.nombre}`
+              : empresaSeleccionada
+              ? ` de ${empresaSeleccionada.nombre}`
+              : ""}
           </h3>
-
           <p className="text-sm text-slate-500">
             Lista de sueldos base, bonos y valores por cargo/sucursal.
           </p>
         </div>
 
-        {!empresaSeleccionada ? (
-          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500 sm:text-base">
+        {!holdingId ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
+            Selecciona un grupo empresarial para comenzar.
+          </div>
+        ) : !empresaSeleccionada ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
             Selecciona una empresa para ver sus tarifas.
           </div>
         ) : loadingTarifas ? (
-          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500 sm:text-base">
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
             Cargando tarifas...
           </div>
-        ) : tarifas.length === 0 ? (
-          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500 sm:text-base">
-            Esta empresa aún no tiene tarifas asociadas.
+        ) : sucursales.length === 0 ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
+            Esta empresa no tiene sucursales registradas en este holding.
+          </div>
+        ) : tarifasFiltradas.length === 0 ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
+            {sucursalSeleccionada
+              ? `"${sucursalSeleccionada.nombre}" aún no tiene tarifas asociadas.`
+              : "Esta empresa aún no tiene tarifas asociadas."}
           </div>
         ) : (
           <>
             <div className="max-h-[65vh] overflow-y-auto pr-1 lg:hidden">
               <div className="grid grid-cols-1 gap-4">
-                {tarifas.map((tarifa) => {
+                {tarifasFiltradas.map((tarifa) => {
                   const totalBonos = calcularTotalBonos(tarifa);
 
                   return (
@@ -624,19 +766,17 @@ export default function Cargos() {
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#4E1743]/10 font-black text-[#4E1743]">
                           {tarifa.Cargo?.nombre?.charAt(0) || "C"}
                         </div>
-
                         <div className="min-w-0 flex-1">
                           <p className="break-words font-black text-slate-900">
                             {tarifa.Cargo?.nombre || "-"}
                           </p>
-
                           <p className="text-xs text-slate-500">
                             {tarifa.Sucursal?.nombre || "-"} · ID #{tarifa.id}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="rounded-xl bg-slate-50 p-3">
                           <p className="text-xs font-bold text-slate-500">
                             Sueldo base
@@ -674,7 +814,7 @@ export default function Cargos() {
                         </div>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="mt-4 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => editarTarifa(tarifa)}
@@ -713,7 +853,7 @@ export default function Cargos() {
                   </thead>
 
                   <tbody>
-                    {tarifas.map((tarifa) => {
+                    {tarifasFiltradas.map((tarifa) => {
                       const totalBonos = calcularTotalBonos(tarifa);
 
                       return (
@@ -725,7 +865,6 @@ export default function Cargos() {
                             <p className="font-black text-slate-900">
                               {tarifa.Cargo?.nombre || "-"}
                             </p>
-
                             <p className="text-xs text-slate-500">
                               ID tarifa #{tarifa.id}
                             </p>
@@ -794,7 +933,13 @@ export default function Cargos() {
         onClose={limpiarFormulario}
         onSubmit={handleSubmit}
         onChange={handleTarifaChange}
-        onCrearSucursal={() => setModalSucursalOpen(true)}
+        onCrearSucursal={() => {
+          setFormSucursal({
+            ...formSucursalInicial,
+            holdingId: holdingId || "",
+          });
+          setModalSucursalOpen(true);
+        }}
         onCrearCargo={() => setModalCargoOpen(true)}
       />
 
@@ -813,12 +958,20 @@ export default function Cargos() {
       <CrearSucursalModal
         open={modalSucursalOpen}
         loading={loading}
-        form={formSucursal}
+        empresaNombre={empresaSeleccionada?.nombre}
+        form={{
+          ...formSucursal,
+          holdingId: holdingId || formSucursal.holdingId || "",
+        }}
+        holdings={holdings}
         onClose={() => {
-          setFormSucursal(formSucursalInicial);
+          setFormSucursal({
+            ...formSucursalInicial,
+            holdingId: holdingId || "",
+          });
           setModalSucursalOpen(false);
         }}
-        onChange={handleSucursalChange}
+        onChange={handleSucursalFormChange}
         onSubmit={crearNuevaSucursal}
       />
     </DashboardLayout>

@@ -26,21 +26,31 @@ export const crearEmpresaRequest = async (data: EmpresaForm) => {
   formData.append("alias", data.alias);
   formData.append("rut", data.rut);
 
-  // 🔥 NUEVO: enviar datos del encargado
+  // holdings
+  data.holdingIds.forEach((id) => {
+    formData.append("holdingIds", String(id));
+  });
+
+  // contacto encargado
   formData.append("encargadoNombre", data.encargadoNombre || "");
   formData.append("encargadoCorreo", data.encargadoCorreo || "");
   formData.append("encargadoTelefono", data.encargadoTelefono || "");
 
+  // logo
   if (data.foto) {
     formData.append("foto", data.foto);
   }
 
-  const response = await axios.post(`${API_URL}/empresas`, formData, {
-    headers: {
-      ...getAuthHeaders(),
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await axios.post(
+    `${API_URL}/empresas`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
 
   return response.data;
 };
@@ -55,29 +65,42 @@ export const actualizarEmpresaRequest = async (
   formData.append("alias", data.alias);
   formData.append("rut", data.rut);
 
-  // 🔥 NUEVO: enviar datos del encargado
+  // holdings
+  data.holdingIds.forEach((holdingId) => {
+    formData.append("holdingIds", String(holdingId));
+  });
+
+  // contacto encargado
   formData.append("encargadoNombre", data.encargadoNombre || "");
   formData.append("encargadoCorreo", data.encargadoCorreo || "");
   formData.append("encargadoTelefono", data.encargadoTelefono || "");
 
+  // logo
   if (data.foto) {
     formData.append("foto", data.foto);
   }
 
-  const response = await axios.put(`${API_URL}/empresas/${id}`, formData, {
-    headers: {
-      ...getAuthHeaders(),
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await axios.put(
+    `${API_URL}/empresas/${id}`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
 
   return response.data;
 };
 
 export const eliminarEmpresaRequest = async (id: number) => {
-  const response = await axios.delete(`${API_URL}/empresas/${id}`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await axios.delete(
+    `${API_URL}/empresas/${id}`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
 
   return response.data;
 };

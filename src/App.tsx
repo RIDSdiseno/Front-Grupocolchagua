@@ -8,6 +8,7 @@ import Trabajadores from "./pages/Trabajadores";
 import Asignaciones from "./pages/Asignaciones";
 import Asistencia from "./pages/Asistencia";
 import Sucursales from "./pages/Sucursales";
+import Usuarios from "./pages/Usuarios";
 
 function App() {
   return (
@@ -74,6 +75,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Sucursales />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/usuarios"
+          element={
+            <ProtectedRoute>
+              <Usuarios />
             </ProtectedRoute>
           }
         />

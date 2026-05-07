@@ -1,12 +1,16 @@
 import type { SucursalForm } from "../../types/sucursal";
+import type { Holding } from "../../services/Holding.service";
 
 interface Props {
   open: boolean;
   loading: boolean;
   empresaNombre?: string;
   form: SucursalForm;
+  holdings?: Holding[];
   onClose: () => void;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -15,6 +19,7 @@ export default function CrearSucursalModal({
   loading,
   empresaNombre,
   form,
+  holdings = [],
   onClose,
   onChange,
   onSubmit,
@@ -29,6 +34,7 @@ export default function CrearSucursalModal({
             <h3 className="text-lg font-black text-[#4E1743]">
               Crear sucursal
             </h3>
+
             <p className="text-sm text-slate-500">
               Empresa: {empresaNombre || "-"}
             </p>
@@ -46,8 +52,31 @@ export default function CrearSucursalModal({
         <form onSubmit={onSubmit} className="p-6">
           <div className="mb-4">
             <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Holding
+            </label>
+
+            <select
+              name="holdingId"
+              value={form.holdingId ?? ""}
+              onChange={onChange}
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 font-semibold outline-none focus:border-[#4E1743] focus:ring-4 focus:ring-[#4E1743]/10"
+              required
+            >
+              <option value="">Selecciona un holding</option>
+
+              {holdings.map((holding) => (
+                <option key={holding.id} value={holding.id}>
+                  {holding.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Nombre sucursal
             </label>
+
             <input
               name="nombre"
               value={form.nombre}
@@ -62,6 +91,7 @@ export default function CrearSucursalModal({
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Dirección
             </label>
+
             <input
               name="direccion"
               value={form.direccion}
@@ -76,6 +106,7 @@ export default function CrearSucursalModal({
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Comuna
               </label>
+
               <input
                 name="comuna"
                 value={form.comuna}
@@ -89,6 +120,7 @@ export default function CrearSucursalModal({
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Ciudad
               </label>
+
               <input
                 name="ciudad"
                 value={form.ciudad}

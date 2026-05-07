@@ -1,10 +1,26 @@
 import { useEffect, useState } from "react";
 import type { Asignacion, AsignacionForm } from "../../types/asignacion";
 import type { Trabajador } from "../../types/trabajador";
-import type { Empresa } from "../../types/empresa";
 import type { Cargo } from "../../types/cargo";
-import type { Sucursal } from "../../types/sucursal";
-import { listarSucursalesPorEmpresaRequest } from "../../services/sucursal.service";
+import {
+  listarHoldingsRequest,
+  obtenerHoldingRequest,
+  type Holding,
+} from "../../services/Holding.service";
+
+interface SucursalOption {
+  id: number;
+  nombre: string;
+  comuna?: string | null;
+  ciudad?: string | null;
+}
+
+interface EmpresaOption {
+  id: number;
+  nombre: string;
+  rut?: string | null;
+  Sucursal: SucursalOption[];
+}
 
 interface Props {
   open: boolean;
@@ -12,7 +28,7 @@ interface Props {
   editando: Asignacion | null;
   form: AsignacionForm;
   trabajadores: Trabajador[];
-  empresas: Empresa[];
+  empresas: EmpresaOption[];
   cargos: Cargo[];
   onClose: () => void;
   onChange: (name: keyof AsignacionForm, value: number | string | "") => void;
@@ -25,31 +41,128 @@ export default function AsignacionModal({
   editando,
   form,
   trabajadores,
-  empresas,
   cargos,
   onClose,
   onChange,
   onSubmit,
 }: Props) {
-  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
-  const [cargandoSucursales, setCargandoSucursales] = useState(false);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [empresasHolding, setEmpresasHolding] = useState<EmpresaOption[]>([]);
+  const [sucursales, setSucursales] = useState<SucursalOption[]>([]);
+  const [holdingId, setHoldingId] = useState<number | "">("");
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(false);
 
   useEffect(() => {
-    if (!form.empresaId) {
-      setSucursales([]);
-      return;
-    }
-    setCargandoSucursales(true);
-    listarSucursalesPorEmpresaRequest(Number(form.empresaId))
-      .then(setSucursales)
-      .catch(() => setSucursales([]))
-      .finally(() => setCargandoSucursales(false));
-  }, [form.empresaId]);
+    if (!open) return;
 
-  // Al cambiar empresa, limpiar sucursal seleccionada
-  const handleEmpresaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange("empresaId", e.target.value ? Number(e.target.value) : "");
+    let activo = true;
+
+    void listarHoldingsRequest()
+      .then((data) => {
+        if (activo) setHoldings(data);
+      })
+      .catch(() => {
+        if (activo) setHoldings([]);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !editando || holdings.length === 0 || !form.empresaId) return;
+
+    let activo = true;
+
+    const buscarHoldingInicial = async () => {
+      for (const holding of holdings) {
+        try {
+          const detalle = await obtenerHoldingRequest(holding.id);
+
+          if (!activo) return;
+
+          const existeEmpresa = detalle.empresas.some(
+            (item) => item.Empresa.id === Number(form.empresaId)
+          );
+
+          if (existeEmpresa) {
+            const empresasDelHolding = detalle.empresas.map((item) => ({
+              id: item.Empresa.id,
+              nombre: item.Empresa.nombre,
+              rut: item.Empresa.rut,
+              Sucursal: item.Empresa.Sucursal || [],
+            }));
+
+            const empresaSeleccionada = empresasDelHolding.find(
+              (empresa) => empresa.id === Number(form.empresaId)
+            );
+
+            setHoldingId(holding.id);
+            setEmpresasHolding(empresasDelHolding);
+            setSucursales(empresaSeleccionada?.Sucursal || []);
+            break;
+          }
+        } catch {
+          // continúa buscando
+        }
+      }
+    };
+
+    void buscarHoldingInicial();
+
+    return () => {
+      activo = false;
+    };
+  }, [open, editando, holdings, form.empresaId]);
+
+  const handleHoldingChange = async (value: string) => {
+    const nuevoHoldingId = value ? Number(value) : "";
+
+    setHoldingId(nuevoHoldingId);
+    setEmpresasHolding([]);
+    setSucursales([]);
+
+    onChange("empresaId", "");
     onChange("sucursalId", "");
+
+    if (!nuevoHoldingId) return;
+
+    setCargandoEmpresas(true);
+
+    try {
+      const holding = await obtenerHoldingRequest(Number(nuevoHoldingId));
+
+      const empresasDelHolding = holding.empresas.map((item) => ({
+        id: item.Empresa.id,
+        nombre: item.Empresa.nombre,
+        rut: item.Empresa.rut,
+        Sucursal: item.Empresa.Sucursal || [],
+      }));
+
+      setEmpresasHolding(empresasDelHolding);
+    } catch {
+      setEmpresasHolding([]);
+    } finally {
+      setCargandoEmpresas(false);
+    }
+  };
+
+  const handleEmpresaChange = (value: string) => {
+    const nuevaEmpresaId = value ? Number(value) : "";
+
+    onChange("empresaId", nuevaEmpresaId);
+    onChange("sucursalId", "");
+
+    const empresaSeleccionada = empresasHolding.find(
+      (empresa) => empresa.id === Number(value)
+    );
+
+    setSucursales(empresaSeleccionada?.Sucursal || []);
+  };
+
+  const handleSucursalChange = (value: string) => {
+    onChange("sucursalId", value ? Number(value) : "");
   };
 
   if (!open) return null;
@@ -61,6 +174,7 @@ export default function AsignacionModal({
           <h3 className="text-lg font-bold text-[#4E1743]">
             {editando ? "Editar asignación" : "Nueva asignación"}
           </h3>
+
           <button
             type="button"
             onClick={onClose}
@@ -71,23 +185,28 @@ export default function AsignacionModal({
         </div>
 
         <form onSubmit={onSubmit} className="p-6">
-          {/* Trabajador */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Trabajador
             </h4>
+
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Trabajador <span className="text-red-500">*</span>
             </label>
+
             <select
               value={form.trabajadorId}
               onChange={(e) =>
-                onChange("trabajadorId", e.target.value ? Number(e.target.value) : "")
+                onChange(
+                  "trabajadorId",
+                  e.target.value ? Number(e.target.value) : ""
+                )
               }
               required
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
             >
               <option value="">Selecciona un trabajador</option>
+
               {trabajadores
                 .filter((t) => t.activo)
                 .map((t) => (
@@ -98,7 +217,6 @@ export default function AsignacionModal({
             </select>
           </div>
 
-          {/* Empresa y Sucursal */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Destino
@@ -106,16 +224,46 @@ export default function AsignacionModal({
 
             <div className="mb-4">
               <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Empresa <span className="text-red-500">*</span>
+                Holding <span className="text-red-500">*</span>
               </label>
+
               <select
-                value={form.empresaId}
-                onChange={handleEmpresaChange}
+                value={holdingId}
+                onChange={(e) => handleHoldingChange(e.target.value)}
                 required
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
               >
-                <option value="">Selecciona una empresa</option>
-                {empresas.map((e) => (
+                <option value="">Selecciona un holding</option>
+
+                {holdings.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Empresa <span className="text-red-500">*</span>
+              </label>
+
+              <select
+                value={form.empresaId}
+                onChange={(e) => handleEmpresaChange(e.target.value)}
+                required
+                disabled={!holdingId || cargandoEmpresas}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">
+                  {cargandoEmpresas
+                    ? "Cargando empresas..."
+                    : !holdingId
+                    ? "Primero selecciona un holding"
+                    : "Selecciona una empresa"}
+                </option>
+
+                {empresasHolding.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.nombre}
                   </option>
@@ -125,43 +273,43 @@ export default function AsignacionModal({
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Sucursal{" "}
-                <span className="text-slate-400 font-normal">(opcional)</span>
+                Sucursal <span className="text-red-500">*</span>
               </label>
+
               <select
                 value={form.sucursalId}
-                onChange={(e) =>
-                  onChange("sucursalId", e.target.value ? Number(e.target.value) : "")
-                }
-                disabled={!form.empresaId || cargandoSucursales}
+                onChange={(e) => handleSucursalChange(e.target.value)}
+                required
+                disabled={!form.empresaId}
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20 disabled:bg-slate-50 disabled:text-slate-400"
               >
                 <option value="">
-                  {cargandoSucursales
-                    ? "Cargando sucursales..."
-                    : !form.empresaId
+                  {!form.empresaId
                     ? "Primero selecciona una empresa"
                     : sucursales.length === 0
                     ? "Sin sucursales registradas"
-                    : "Sin sucursal específica"}
+                    : "Selecciona una sucursal"}
                 </option>
+
                 {sucursales.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nombre}
+                    {s.comuna ? ` - ${s.comuna}` : ""}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Cargo */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Cargo
             </h4>
+
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Cargo <span className="text-red-500">*</span>
             </label>
+
             <select
               value={form.cargoId}
               onChange={(e) =>
@@ -171,6 +319,7 @@ export default function AsignacionModal({
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
             >
               <option value="">Selecciona un cargo</option>
+
               {cargos.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
@@ -179,16 +328,17 @@ export default function AsignacionModal({
             </select>
           </div>
 
-          {/* Fechas */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Período
             </h4>
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Fecha de inicio <span className="text-red-500">*</span>
                 </label>
+
                 <input
                   type="date"
                   value={form.fechaInicio}
@@ -197,11 +347,13 @@ export default function AsignacionModal({
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
                 />
               </div>
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Fecha de término{" "}
-                  <span className="text-slate-400 font-normal">(opcional)</span>
+                  <span className="font-normal text-slate-400">(opcional)</span>
                 </label>
+
                 <input
                   type="date"
                   value={form.fechaFin}
@@ -209,6 +361,7 @@ export default function AsignacionModal({
                   min={form.fechaInicio || undefined}
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
                 />
+
                 <p className="mt-1 text-xs text-slate-400">
                   Dejar vacío para contrato indefinido
                 </p>
@@ -224,6 +377,7 @@ export default function AsignacionModal({
             >
               Cancelar
             </button>
+
             <button
               type="submit"
               disabled={loading}

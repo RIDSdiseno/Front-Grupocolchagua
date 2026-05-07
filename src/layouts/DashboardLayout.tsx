@@ -16,6 +16,7 @@ const menuItems = [
   { label: "Asignaciones", path: "/asignaciones" },
   { label: "Asistencia", path: "/asistencia" },
   { label: "Liquidaciones", path: "/liquidaciones" },
+  { label: "Usuarios", path: "/usuarios" },
 ];
 
 export default function DashboardLayout({ children }: Props) {

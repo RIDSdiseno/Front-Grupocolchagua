@@ -1,3 +1,16 @@
+export interface EmpresaHolding {
+  id: number;
+  holdingId: number;
+  empresaId: number;
+
+  Holding: {
+    id: number;
+    nombre: string;
+    logoUrl?: string | null;
+    logoPublicId?: string | null;
+  };
+}
+
 export interface Empresa {
   id: number;
   nombre: string;
@@ -8,6 +21,8 @@ export interface Empresa {
   encargadoNombre?: string | null;
   encargadoCorreo?: string | null;
   encargadoTelefono?: string | null;
+
+  holdings?: EmpresaHolding[];
 }
 
 export interface EmpresaForm {
@@ -18,4 +33,17 @@ export interface EmpresaForm {
   encargadoNombre: string;
   encargadoCorreo: string;
   encargadoTelefono: string;
+
+  holdingIds: number[];
+}
+
+export interface Holding {
+  id: number;
+  nombre: string;
+  logoUrl?: string | null;
+  logoPublicId?: string | null;
+
+  _count?: {
+    empresas: number;
+  };
 }

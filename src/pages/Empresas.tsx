@@ -11,6 +11,10 @@ import {
   listarEmpresasRequest,
 } from "../services/empresa.service";
 import { crearSucursalRequest } from "../services/sucursal.service";
+import {
+  listarHoldingsRequest,
+  type Holding,
+} from "../services/Holding.service";
 
 const initialForm: EmpresaForm = {
   razonSocial: "",
@@ -20,6 +24,7 @@ const initialForm: EmpresaForm = {
   encargadoNombre: "",
   encargadoCorreo: "",
   encargadoTelefono: "",
+  holdingIds: [],
 };
 
 const initialSucursalForm: SucursalForm = {
@@ -27,6 +32,7 @@ const initialSucursalForm: SucursalForm = {
   direccion: "",
   comuna: "",
   ciudad: "",
+  holdingId: "",
 };
 
 const obtenerMensajeError = (err: unknown, fallback: string) => {
@@ -45,7 +51,10 @@ const obtenerMensajeError = (err: unknown, fallback: string) => {
 };
 
 export default function Empresas() {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [holdingSeleccionado, setHoldingSeleccionado] = useState<number | "">("");
+
   const [form, setForm] = useState<EmpresaForm>(initialForm);
   const [editando, setEditando] = useState<Empresa | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -59,29 +68,57 @@ export default function Empresas() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
+  const empresasFiltradas = useMemo(() => {
+    if (!holdingSeleccionado) return empresas;
+
+    return empresas.filter((empresa) =>
+      empresa.holdings?.some(
+        (relacion) => relacion.Holding.id === Number(holdingSeleccionado)
+      )
+    );
+  }, [empresas, holdingSeleccionado]);
+
+  const holdingActual = useMemo(() => {
+    if (!holdingSeleccionado) return null;
+    return holdings.find((h) => h.id === Number(holdingSeleccionado)) || null;
+  }, [holdings, holdingSeleccionado]);
+
   const empresasConContacto = useMemo(() => {
-    return empresas.filter(
-      (empresa) =>
-        empresa.encargadoNombre ||
-        empresa.encargadoCorreo ||
-        empresa.encargadoTelefono
+    return empresasFiltradas.filter(
+      (e) => e.encargadoNombre || e.encargadoCorreo || e.encargadoTelefono
     ).length;
-  }, [empresas]);
+  }, [empresasFiltradas]);
+
+  const cargarEmpresas = async () => {
+    const data = await listarEmpresasRequest();
+    setEmpresas(data);
+  };
+
+  const cargarHoldings = async () => {
+    const data = await listarHoldingsRequest();
+    setHoldings(data);
+  };
 
   useEffect(() => {
     let activo = true;
 
     const cargarInicial = async () => {
       try {
-        const data = await listarEmpresasRequest();
+        const [holdingsData, empresasData] = await Promise.all([
+          listarHoldingsRequest(),
+          listarEmpresasRequest(),
+        ]);
 
         if (!activo) return;
 
-        setEmpresas(data);
-      } catch {
-        if (activo) {
-          setError("Error al cargar empresas");
+        setHoldings(holdingsData);
+        setEmpresas(empresasData);
+
+        if (holdingsData.length > 0) {
+          setHoldingSeleccionado(holdingsData[0].id);
         }
+      } catch {
+        if (activo) setError("Error al cargar datos");
       }
     };
 
@@ -92,13 +129,11 @@ export default function Empresas() {
     };
   }, []);
 
-  const cargarEmpresas = async () => {
-    const data = await listarEmpresasRequest();
-    setEmpresas(data);
-  };
-
   const abrirCrear = () => {
-    setForm(initialForm);
+    setForm({
+      ...initialForm,
+      holdingIds: holdingSeleccionado ? [Number(holdingSeleccionado)] : [],
+    });
     setEditando(null);
     setMensaje("");
     setError("");
@@ -113,7 +148,10 @@ export default function Empresas() {
 
   const abrirSucursalModal = (empresa: Empresa) => {
     setEmpresaSucursal(empresa);
-    setSucursalForm(initialSucursalForm);
+    setSucursalForm({
+      ...initialSucursalForm,
+      holdingId: holdingSeleccionado || "",
+    });
     setMensaje("");
     setError("");
     setModalSucursalOpen(true);
@@ -125,24 +163,43 @@ export default function Empresas() {
     setModalSucursalOpen(false);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, files } = e.target;
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
 
     if (name === "foto") {
-      setForm((prev) => ({ ...prev, foto: files?.[0] || null }));
+      const input = e.target as HTMLInputElement;
+      setForm((prev) => ({ ...prev, foto: input.files?.[0] || null }));
+      return;
+    }
+
+    if (name === "holdingIds") {
+      const input = e.target as HTMLInputElement;
+      const holdingId = Number(input.value);
+
+      setForm((prev) => {
+        const actuales = prev.holdingIds || [];
+
+        return {
+          ...prev,
+          holdingIds: input.checked
+            ? [...actuales, holdingId]
+            : actuales.filter((id) => id !== holdingId),
+        };
+      });
+
       return;
     }
 
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSucursalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSucursalChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-
-    setSucursalForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setSucursalForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const editarEmpresa = (empresa: Empresa) => {
@@ -156,6 +213,8 @@ export default function Empresas() {
       encargadoNombre: empresa.encargadoNombre || "",
       encargadoCorreo: empresa.encargadoCorreo || "",
       encargadoTelefono: empresa.encargadoTelefono || "",
+      holdingIds:
+        empresa.holdings?.map((relacion) => relacion.Holding.id) || [],
     });
 
     setMensaje("");
@@ -165,6 +224,11 @@ export default function Empresas() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!form.holdingIds || form.holdingIds.length === 0) {
+      setError("Debes seleccionar al menos un holding");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -180,7 +244,7 @@ export default function Empresas() {
       }
 
       cerrarModal();
-      await cargarEmpresas();
+      await Promise.all([cargarEmpresas(), cargarHoldings()]);
     } catch (err: unknown) {
       setError(obtenerMensajeError(err, "Error al guardar empresa"));
     } finally {
@@ -196,6 +260,11 @@ export default function Empresas() {
       return;
     }
 
+    if (!sucursalForm.holdingId) {
+      setError("Debes seleccionar un holding para la sucursal");
+      return;
+    }
+
     if (!sucursalForm.nombre.trim()) {
       setError("Debes ingresar el nombre de la sucursal");
       return;
@@ -206,7 +275,11 @@ export default function Empresas() {
     setMensaje("");
 
     try {
-      await crearSucursalRequest(empresaSucursal.id, sucursalForm);
+      await crearSucursalRequest(empresaSucursal.id, {
+        ...sucursalForm,
+        holdingId: Number(sucursalForm.holdingId),
+      });
+
       setMensaje("Sucursal creada correctamente");
       cerrarSucursalModal();
     } catch (err: unknown) {
@@ -223,14 +296,19 @@ export default function Empresas() {
     try {
       setError("");
       setMensaje("");
-
       await eliminarEmpresaRequest(empresa.id);
-
       setMensaje("Empresa eliminada correctamente");
-      await cargarEmpresas();
+      await Promise.all([cargarEmpresas(), cargarHoldings()]);
     } catch (err: unknown) {
       setError(obtenerMensajeError(err, "Error al eliminar empresa"));
     }
+  };
+
+  const obtenerNombreHoldingsEmpresa = (empresa: Empresa) => {
+    const nombres =
+      empresa.holdings?.map((relacion) => relacion.Holding.nombre) || [];
+
+    return nombres.length > 0 ? nombres : [];
   };
 
   return (
@@ -240,9 +318,7 @@ export default function Empresas() {
           <p className="mb-2 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
             Gestión de clientes
           </p>
-
           <h2 className="text-3xl font-black text-slate-900">Empresas</h2>
-
           <p className="mt-2 max-w-2xl text-slate-500">
             Administra empresas cliente, encargados y sucursales asociadas.
           </p>
@@ -269,18 +345,62 @@ export default function Empresas() {
         </div>
       )}
 
+      <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-base font-black text-slate-900">
+          Selecciona el grupo empresarial
+        </h3>
+
+        <div className="flex flex-wrap gap-3">
+          {holdings.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              onClick={() => setHoldingSeleccionado(h.id)}
+              className={`rounded-2xl px-6 py-3 font-bold transition ${
+                holdingSeleccionado === h.id
+                  ? "bg-[#4E1743] text-white shadow-lg"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {h.nombre}
+              <span
+                className={`ml-2 text-xs ${
+                  holdingSeleccionado === h.id
+                    ? "text-white/70"
+                    : "text-slate-400"
+                }`}
+              >
+                ({h._count?.empresas ?? 0})
+              </span>
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setHoldingSeleccionado("")}
+            className={`rounded-2xl px-6 py-3 font-bold transition ${
+              holdingSeleccionado === ""
+                ? "bg-[#4E1743] text-white shadow-lg"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Todas
+          </button>
+        </div>
+      </div>
+
       <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-bold text-slate-500">
             Empresas registradas
           </p>
-
           <p className="mt-3 text-4xl font-black text-slate-900">
-            {empresas.length}
+            {empresasFiltradas.length}
           </p>
-
           <p className="mt-2 text-sm text-slate-500">
-            Clientes activos en el sistema.
+            {holdingActual
+              ? `En ${holdingActual.nombre}`
+              : "Clientes activos en el sistema."}
           </p>
         </div>
 
@@ -288,11 +408,9 @@ export default function Empresas() {
           <p className="text-sm font-bold text-slate-500">
             Con contacto registrado
           </p>
-
           <p className="mt-3 text-4xl font-black text-slate-900">
             {empresasConContacto}
           </p>
-
           <p className="mt-2 text-sm text-slate-500">
             Empresas con encargado asociado.
           </p>
@@ -300,9 +418,7 @@ export default function Empresas() {
 
         <div className="rounded-3xl border border-slate-200 bg-[#4E1743] p-6 text-white shadow-sm">
           <p className="text-sm font-bold text-white/70">Sucursales</p>
-
           <p className="mt-3 text-4xl font-black">Por empresa</p>
-
           <p className="mt-2 text-sm text-white/70">
             Cada tarifa dependerá de la sucursal seleccionada.
           </p>
@@ -312,9 +428,9 @@ export default function Empresas() {
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <h3 className="text-lg font-black text-slate-900">
-            Empresas registradas
+            Empresas
+            {holdingActual ? ` de ${holdingActual.nombre}` : " registradas"}
           </h3>
-
           <p className="text-sm text-slate-500">
             Desde aquí puedes editar la empresa o crear sus sucursales.
           </p>
@@ -325,6 +441,7 @@ export default function Empresas() {
             <thead>
               <tr className="border-b text-slate-500">
                 <th className="py-4">Empresa</th>
+                <th className="py-4">Holdings</th>
                 <th className="py-4">Razón social</th>
                 <th className="py-4">RUT</th>
                 <th className="py-4">Encargado</th>
@@ -335,93 +452,113 @@ export default function Empresas() {
             </thead>
 
             <tbody>
-              {empresas.map((empresa) => (
-                <tr
-                  key={empresa.id}
-                  className="border-b transition hover:bg-slate-50 last:border-none"
-                >
-                  <td className="py-4">
-                    <div className="flex items-center gap-3">
-                      {empresa.logoUrl ? (
-                        <img
-                          src={empresa.logoUrl}
-                          alt={empresa.nombre}
-                          className="h-12 w-12 rounded-2xl border bg-white object-contain p-1"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#4E1743]/10 font-black text-[#4E1743]">
-                          {empresa.nombre?.charAt(0)}
+              {empresasFiltradas.map((empresa) => {
+                const nombresHoldings = obtenerNombreHoldingsEmpresa(empresa);
+
+                return (
+                  <tr
+                    key={empresa.id}
+                    className="border-b transition hover:bg-slate-50 last:border-none"
+                  >
+                    <td className="py-4">
+                      <div className="flex items-center gap-3">
+                        {empresa.logoUrl ? (
+                          <img
+                            src={empresa.logoUrl}
+                            alt={empresa.nombre}
+                            className="h-12 w-12 rounded-2xl border bg-white object-contain p-1"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#4E1743]/10 font-black text-[#4E1743]">
+                            {empresa.nombre?.charAt(0)}
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="font-black text-slate-900">
+                            {empresa.nombre}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            ID #{empresa.id}
+                          </p>
                         </div>
-                      )}
-
-                      <div>
-                        <p className="font-black text-slate-900">
-                          {empresa.nombre}
-                        </p>
-
-                        <p className="text-xs text-slate-500">
-                          ID #{empresa.id}
-                        </p>
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  <td className="py-4 text-slate-600">
-                    {empresa.razonSocial || "-"}
-                  </td>
+                    <td className="py-4">
+                      {nombresHoldings.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {nombresHoldings.map((nombre) => (
+                            <span
+                              key={nombre}
+                              className="rounded-full bg-[#4E1743]/10 px-3 py-1 text-xs font-bold text-[#4E1743]"
+                            >
+                              {nombre}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
 
-                  <td className="py-4">
-                    <span className="rounded-full bg-slate-100 px-4 py-2 font-bold text-slate-700">
-                      {empresa.rut || "-"}
-                    </span>
-                  </td>
+                    <td className="py-4 text-slate-600">
+                      {empresa.razonSocial || "-"}
+                    </td>
 
-                  <td className="py-4 text-slate-600">
-                    {empresa.encargadoNombre || "-"}
-                  </td>
+                    <td className="py-4">
+                      <span className="rounded-full bg-slate-100 px-4 py-2 font-bold text-slate-700">
+                        {empresa.rut || "-"}
+                      </span>
+                    </td>
 
-                  <td className="py-4 text-slate-600">
-                    {empresa.encargadoCorreo || "-"}
-                  </td>
+                    <td className="py-4 text-slate-600">
+                      {empresa.encargadoNombre || "-"}
+                    </td>
+                    <td className="py-4 text-slate-600">
+                      {empresa.encargadoCorreo || "-"}
+                    </td>
+                    <td className="py-4 text-slate-600">
+                      {empresa.encargadoTelefono || "-"}
+                    </td>
 
-                  <td className="py-4 text-slate-600">
-                    {empresa.encargadoTelefono || "-"}
-                  </td>
+                    <td className="py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => abrirSucursalModal(empresa)}
+                          className="rounded-xl bg-[#4E1743]/10 px-4 py-2 font-bold text-[#4E1743] transition hover:bg-[#4E1743]/20"
+                        >
+                          Sucursal
+                        </button>
 
-                  <td className="py-4">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => abrirSucursalModal(empresa)}
-                        className="rounded-xl bg-[#4E1743]/10 px-4 py-2 font-bold text-[#4E1743] transition hover:bg-[#4E1743]/20"
-                      >
-                        Sucursal
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => editarEmpresa(empresa)}
+                          className="rounded-xl bg-slate-100 px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-200"
+                        >
+                          Editar
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => editarEmpresa(empresa)}
-                        className="rounded-xl bg-slate-100 px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-200"
-                      >
-                        Editar
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => eliminarEmpresa(empresa)}
+                          className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
 
-                      <button
-                        type="button"
-                        onClick={() => eliminarEmpresa(empresa)}
-                        className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {empresas.length === 0 && (
+              {empresasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">
-                    No hay empresas registradas.
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                    {holdingActual
+                      ? `No hay empresas registradas en ${holdingActual.nombre}.`
+                      : "No hay empresas registradas."}
                   </td>
                 </tr>
               )}
@@ -435,6 +572,7 @@ export default function Empresas() {
         loading={loading}
         editando={editando}
         form={form}
+        holdings={holdings}
         onClose={cerrarModal}
         onChange={handleChange}
         onSubmit={handleSubmit}
@@ -445,6 +583,7 @@ export default function Empresas() {
         loading={loading}
         empresaNombre={empresaSucursal?.nombre}
         form={sucursalForm}
+        holdings={holdings}
         onClose={cerrarSucursalModal}
         onChange={handleSucursalChange}
         onSubmit={handleSucursalSubmit}

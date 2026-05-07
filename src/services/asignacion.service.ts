@@ -5,17 +5,26 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
-  return { Authorization: `Bearer ${token}` };
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
 };
 
-export const listarAsignacionesRequest = async (filtros?: {
+export interface FiltrosAsignacion {
   empresaId?: number;
   trabajadorId?: number;
-}) => {
+  sucursalId?: number;
+}
+
+export const listarAsignacionesRequest = async (
+  filtros?: FiltrosAsignacion
+) => {
   const response = await axios.get(`${API_URL}/asignaciones`, {
     headers: getAuthHeaders(),
     params: filtros,
   });
+
   return response.data.asignaciones;
 };
 
@@ -28,9 +37,11 @@ export const crearAsignacionRequest = async (data: AsignacionForm) => {
     fechaInicio: data.fechaInicio,
     fechaFin: data.fechaFin || null,
   };
+
   const response = await axios.post(`${API_URL}/asignaciones`, payload, {
     headers: getAuthHeaders(),
   });
+
   return response.data;
 };
 
@@ -43,9 +54,15 @@ export const actualizarAsignacionRequest = async (
     sucursalId: data.sucursalId || null,
     fechaFin: data.fechaFin || null,
   };
-  const response = await axios.put(`${API_URL}/asignaciones/${id}`, payload, {
-    headers: getAuthHeaders(),
-  });
+
+  const response = await axios.put(
+    `${API_URL}/asignaciones/${id}`,
+    payload,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
+
   return response.data;
 };
 
@@ -53,5 +70,6 @@ export const eliminarAsignacionRequest = async (id: number) => {
   const response = await axios.delete(`${API_URL}/asignaciones/${id}`, {
     headers: getAuthHeaders(),
   });
+
   return response.data;
 };

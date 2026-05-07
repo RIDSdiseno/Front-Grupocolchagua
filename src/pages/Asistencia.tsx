@@ -2,15 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import CeldaAsistenciaModal from "../components/asistencia/CeldaAsistenciaModal";
 import type { Asistencia, AsistenciaForm } from "../types/asistencia";
-import type { Empresa } from "../types/empresa";
 import type { Asignacion } from "../types/asignacion";
 import {
   listarAsistenciaRequest,
   registrarAsistenciaRequest,
   eliminarAsistenciaRequest,
 } from "../services/asistencia.service";
-import { listarEmpresasRequest } from "../services/empresa.service";
 import { listarAsignacionesRequest } from "../services/asignacion.service";
+import {
+  listarHoldingsRequest,
+  obtenerHoldingRequest,
+  type Holding,
+} from "../services/Holding.service";
+
+interface EmpresaOption {
+  id: number;
+  nombre: string;
+  rut?: string | null;
+  Sucursal: SucursalOption[];
+}
+
+interface SucursalOption {
+  id: number;
+  nombre: string;
+  comuna?: string | null;
+  ciudad?: string | null;
+}
 
 const ESTADO_CONFIG: Record<string, { bg: string; text: string; label: string }> =
   {
@@ -59,11 +76,18 @@ function diaDeISO(fechaStr: string): number {
 
 export default function Asistencia() {
   const hoy = new Date();
+
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [año, setAño] = useState(hoy.getFullYear());
-  const [empresaId, setEmpresaId] = useState<number | "">("");
 
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [holdingId, setHoldingId] = useState<number | "">("");
+  const [empresaId, setEmpresaId] = useState<number | "">("");
+  const [sucursalId, setSucursalId] = useState<number | "">("");
+
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaOption[]>([]);
+  const [sucursales, setSucursales] = useState<SucursalOption[]>([]);
+
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([]);
   const [registros, setRegistros] = useState<Asistencia[]>([]);
 
@@ -81,22 +105,48 @@ export default function Asistencia() {
     cargoId: number;
     sucursalId?: number | null;
   } | null>(null);
+
   const [celdaFecha, setCeldaFecha] = useState("");
   const [celdaRegistro, setCeldaRegistro] = useState<Asistencia | null>(null);
 
-  const asignacionesVisibles = empresaId ? asignaciones : [];
-  const registrosVisibles = empresaId ? registros : [];
+  const asignacionesVisibles = holdingId && empresaId && sucursalId ? asignaciones : [];
+  const registrosVisibles = holdingId && empresaId && sucursalId ? registros : [];
+
+  useEffect(() => {
+    let activo = true;
+
+    listarHoldingsRequest()
+      .then((data) => {
+        if (activo) setHoldings(data);
+      })
+      .catch(() => {
+        if (activo) setError("Error al cargar holdings");
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const cargarGrilla = async () => {
-    if (!empresaId) return;
+    if (!holdingId || !empresaId || !sucursalId) return;
 
     setCargandoGrilla(true);
     setError("");
 
     try {
       const [asig, regs] = await Promise.all([
-        listarAsignacionesRequest({ empresaId: Number(empresaId) }),
-        listarAsistenciaRequest(Number(empresaId), mes, año),
+        listarAsignacionesRequest({
+          empresaId: Number(empresaId),
+          sucursalId: Number(sucursalId),
+        }),
+        listarAsistenciaRequest({
+          holdingId: Number(holdingId),
+          empresaId: Number(empresaId),
+          sucursalId: Number(sucursalId),
+          mes,
+          año,
+        }),
       ]);
 
       const inicioMes = new Date(Date.UTC(año, mes - 1, 1));
@@ -110,37 +160,15 @@ export default function Asistencia() {
 
       setAsignaciones(activas);
       setRegistros(regs);
-    } catch {
-      setError("Error al cargar asistencia");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al cargar asistencia"));
     } finally {
       setCargandoGrilla(false);
     }
   };
 
   useEffect(() => {
-    let activo = true;
-
-    void (async () => {
-      try {
-        const data = await listarEmpresasRequest();
-
-        if (!activo) return;
-
-        setEmpresas(data);
-      } catch {
-        if (activo) {
-          setError("Error al cargar empresas");
-        }
-      }
-    })();
-
-    return () => {
-      activo = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!empresaId) return;
+    if (!holdingId || !empresaId || !sucursalId) return;
 
     let activo = true;
 
@@ -150,8 +178,17 @@ export default function Asistencia() {
 
       try {
         const [asig, regs] = await Promise.all([
-          listarAsignacionesRequest({ empresaId: Number(empresaId) }),
-          listarAsistenciaRequest(Number(empresaId), mes, año),
+          listarAsignacionesRequest({
+            empresaId: Number(empresaId),
+            sucursalId: Number(sucursalId),
+          }),
+          listarAsistenciaRequest({
+            holdingId: Number(holdingId),
+            empresaId: Number(empresaId),
+            sucursalId: Number(sucursalId),
+            mes,
+            año,
+          }),
         ]);
 
         if (!activo) return;
@@ -167,9 +204,9 @@ export default function Asistencia() {
 
         setAsignaciones(activas);
         setRegistros(regs);
-      } catch {
+      } catch (err) {
         if (activo) {
-          setError("Error al cargar asistencia");
+          setError(obtenerMensajeError(err, "Error al cargar asistencia"));
         }
       } finally {
         if (activo) {
@@ -181,7 +218,56 @@ export default function Asistencia() {
     return () => {
       activo = false;
     };
-  }, [empresaId, mes, año]);
+  }, [holdingId, empresaId, sucursalId, mes, año]);
+
+  const handleHoldingChange = async (value: string) => {
+    setHoldingId(value ? Number(value) : "");
+    setEmpresaId("");
+    setSucursalId("");
+    setEmpresas([]);
+    setSucursales([]);
+    setAsignaciones([]);
+    setRegistros([]);
+    setError("");
+    setMensaje("");
+
+    if (!value) return;
+
+    try {
+      const holding = await obtenerHoldingRequest(Number(value));
+
+      const empresasDelHolding = holding.empresas.map((item) => ({
+        id: item.Empresa.id,
+        nombre: item.Empresa.nombre,
+        rut: item.Empresa.rut,
+        Sucursal: item.Empresa.Sucursal || [],
+      }));
+
+      setEmpresas(empresasDelHolding);
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al cargar empresas"));
+    }
+  };
+
+  const handleEmpresaChange = (value: string) => {
+    setEmpresaId(value ? Number(value) : "");
+    setSucursalId("");
+    setAsignaciones([]);
+    setRegistros([]);
+    setError("");
+    setMensaje("");
+
+    const empresa = empresas.find((e) => e.id === Number(value));
+    setSucursales(empresa?.Sucursal || []);
+  };
+
+  const handleSucursalChange = (value: string) => {
+    setSucursalId(value ? Number(value) : "");
+    setAsignaciones([]);
+    setRegistros([]);
+    setError("");
+    setMensaje("");
+  };
 
   const dias = useMemo(() => diasDelMes(año, mes), [año, mes]);
 
@@ -264,7 +350,7 @@ export default function Asistencia() {
   };
 
   const handleGuardar = async () => {
-    if (!celdaTrabajador || !empresaId) return;
+    if (!celdaTrabajador || !empresaId || !sucursalId) return;
 
     setLoading(true);
     setError("");
@@ -278,7 +364,7 @@ export default function Asistencia() {
         turno: celdaForm.turno,
         cargoId: celdaTrabajador.cargoId,
         empresaId: Number(empresaId),
-        sucursalId: celdaTrabajador.sucursalId ?? null,
+        sucursalId: Number(sucursalId),
         observacion: celdaForm.observacion || undefined,
       });
 
@@ -333,7 +419,6 @@ export default function Asistencia() {
       }
 
       const t = totales.get(r.trabajadorId);
-
       if (!t) continue;
 
       if (r.estado === "A") t.asistio++;
@@ -361,7 +446,8 @@ export default function Asistencia() {
           <h2 className="text-3xl font-black text-slate-900">Asistencia</h2>
 
           <p className="mt-2 max-w-2xl text-slate-500">
-            Registra la asistencia diaria de cada trabajador por empresa y mes.
+            Registra la asistencia diaria de cada trabajador por holding,
+            empresa, sucursal y mes.
           </p>
         </div>
       </div>
@@ -378,27 +464,70 @@ export default function Asistencia() {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap items-center gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="min-w-[220px] flex-1">
-          <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-            Empresa
-          </label>
+      <div className="mb-6 flex flex-wrap items-end gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid min-w-[520px] flex-1 grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Holding
+            </label>
 
-          <select
-            value={empresaId}
-            onChange={(e) =>
-              setEmpresaId(e.target.value ? Number(e.target.value) : "")
-            }
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
-          >
-            <option value="">Selecciona una empresa</option>
+            <select
+              value={holdingId}
+              onChange={(e) => handleHoldingChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+            >
+              <option value="">Selecciona un holding</option>
 
-            {empresas.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
+              {holdings.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Empresa
+            </label>
+
+            <select
+              value={empresaId}
+              disabled={!holdingId}
+              onChange={(e) => handleEmpresaChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 outline-none disabled:bg-slate-100 disabled:text-slate-400 focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+            >
+              <option value="">Selecciona una empresa</option>
+
+              {empresas.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Sucursal
+            </label>
+
+            <select
+              value={sucursalId}
+              disabled={!empresaId}
+              onChange={(e) => handleSucursalChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 outline-none disabled:bg-slate-100 disabled:text-slate-400 focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+            >
+              <option value="">Selecciona una sucursal</option>
+
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                  {s.comuna ? ` - ${s.comuna}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div>
@@ -453,9 +582,10 @@ export default function Asistencia() {
         </div>
       </div>
 
-      {!empresaId ? (
+      {!holdingId || !empresaId || !sucursalId ? (
         <div className="rounded-3xl border border-slate-200 bg-white py-16 text-center text-slate-400 shadow-sm">
-          Selecciona una empresa para ver la grilla de asistencia.
+          Selecciona un holding, empresa y sucursal para ver la grilla de
+          asistencia.
         </div>
       ) : cargandoGrilla ? (
         <div className="rounded-3xl border border-slate-200 bg-white py-16 text-center text-slate-400 shadow-sm">
@@ -463,7 +593,7 @@ export default function Asistencia() {
         </div>
       ) : trabajadoresGrilla.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white py-16 text-center text-slate-400 shadow-sm">
-          No hay trabajadores asignados a esta empresa en este período.
+          No hay trabajadores asignados a esta sucursal en este período.
         </div>
       ) : (
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">

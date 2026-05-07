@@ -1,10 +1,8 @@
 import PhoneInputModule from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import type { Empresa, EmpresaForm } from "../../types/empresa";
+import type { Holding } from "../../services/Holding.service";
 
-/**
- * Tipado correcto para evitar `any`
- */
 type PhoneInputModuleType = typeof PhoneInputModule & {
   default?: typeof PhoneInputModule;
 };
@@ -17,20 +15,18 @@ interface Props {
   loading: boolean;
   editando: Empresa | null;
   form: EmpresaForm;
+  holdings: Holding[];
   onClose: () => void;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 const formatearRutInput = (value: string) => {
   const limpio = value.replace(/[^0-9kK]/g, "").toUpperCase();
-
   if (limpio.length <= 1) return limpio;
-
   const cuerpo = limpio.slice(0, -1);
   const dv = limpio.slice(-1);
   const cuerpoFormateado = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
   return `${cuerpoFormateado}-${dv}`;
 };
 
@@ -39,33 +35,24 @@ export default function EmpresaModal({
   loading,
   editando,
   form,
+  holdings,
   onClose,
   onChange,
   onSubmit,
 }: Props) {
   if (!open) return null;
 
-  /**
-   * RUT formateado
-   */
   const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valorFormateado = formatearRutInput(e.target.value);
 
     const syntheticEvent: React.ChangeEvent<HTMLInputElement> = {
       ...e,
-      target: {
-        ...e.target,
-        name: "rut",
-        value: valorFormateado,
-      },
+      target: { ...e.target, name: "rut", value: valorFormateado },
     };
 
     onChange(syntheticEvent);
   };
 
-  /**
-   * Teléfono (PhoneInput)
-   */
   const handleTelefonoChange = (value: string) => {
     const syntheticEvent = {
       target: {
@@ -95,7 +82,49 @@ export default function EmpresaModal({
         </div>
 
         <form onSubmit={onSubmit} className="p-6">
-          {/* DATOS EMPRESA */}
+          <div className="mb-5">
+            <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
+              Grupo empresarial
+            </h4>
+
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Holdings
+            </label>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {holdings.map((holding) => {
+                const checked = form.holdingIds?.includes(holding.id) ?? false;
+
+                return (
+                  <label
+                    key={holding.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 font-semibold transition ${
+                      checked
+                        ? "border-[#4E1743] bg-[#4E1743]/10 text-[#4E1743]"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="holdingIds"
+                      value={holding.id}
+                      checked={checked}
+                      onChange={onChange}
+                      className="h-4 w-4 accent-[#4E1743]"
+                    />
+                    {holding.nombre}
+                  </label>
+                );
+              })}
+            </div>
+
+            {holdings.length === 0 && (
+              <p className="mt-2 text-sm text-slate-500">
+                No hay holdings registrados.
+              </p>
+            )}
+          </div>
+
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Datos de la empresa
@@ -147,7 +176,6 @@ export default function EmpresaModal({
             </div>
           </div>
 
-          {/* CONTACTO */}
           <div className="mb-5">
             <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
               Contacto encargado
@@ -185,14 +213,11 @@ export default function EmpresaModal({
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Teléfono encargado
                 </label>
-
                 <PhoneInput
                   country="cl"
                   value={form.encargadoTelefono?.replace("+", "") || ""}
                   onChange={handleTelefonoChange}
-                  inputProps={{
-                    name: "encargadoTelefono",
-                  }}
+                  inputProps={{ name: "encargadoTelefono" }}
                   enableSearch
                   placeholder="+56 9 1234 5678"
                   containerClass="!w-full"
@@ -202,17 +227,15 @@ export default function EmpresaModal({
             </div>
           </div>
 
-          {/* LOGO */}
           <div className="mb-6">
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Logo
             </label>
-
             <input
               name="foto"
               type="file"
               accept="image/*"
-              onChange={onChange}
+              onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm"
             />
 
@@ -225,7 +248,6 @@ export default function EmpresaModal({
             )}
           </div>
 
-          {/* FOOTER */}
           <div className="flex gap-3 border-t pt-4">
             <button
               type="button"

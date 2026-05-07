@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { AxiosError } from "axios";
 import DashboardLayout from "../layouts/DashboardLayout";
 import TrabajadorModal from "../components/trabajadores/TrabajadorModal";
 import type { Trabajador, TrabajadorForm } from "../types/trabajador";
@@ -8,6 +9,25 @@ import {
   actualizarTrabajadorRequest,
   eliminarTrabajadorRequest,
 } from "../services/trabajador.service";
+import {
+  listarHoldingsRequest,
+  obtenerHoldingRequest,
+  type Holding,
+} from "../services/Holding.service";
+
+interface EmpresaOption {
+  id: number;
+  nombre: string;
+  rut?: string | null;
+  Sucursal: SucursalOption[];
+}
+
+interface SucursalOption {
+  id: number;
+  nombre: string;
+  comuna?: string | null;
+  ciudad?: string | null;
+}
 
 const initialForm: TrabajadorForm = {
   nombre: "",
@@ -16,6 +36,11 @@ const initialForm: TrabajadorForm = {
   telefono: "",
   email: "",
   activo: true,
+};
+
+const obtenerMensajeError = (error: unknown, fallback: string) => {
+  const axiosError = error as AxiosError<{ message?: string }>;
+  return axiosError.response?.data?.message || fallback;
 };
 
 export default function Trabajadores() {
@@ -27,28 +52,122 @@ export default function Trabajadores() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const [busqueda, setBusqueda] = useState("");
-  const [filtroActivo, setFiltroActivo] = useState<"todos" | "activos" | "inactivos">("todos");
+  const [filtroActivo, setFiltroActivo] = useState<
+    "todos" | "activos" | "inactivos"
+  >("todos");
 
-  const cargarTrabajadores = async () => {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaOption[]>([]);
+  const [sucursales, setSucursales] = useState<SucursalOption[]>([]);
+
+  const [holdingId, setHoldingId] = useState("");
+  const [empresaId, setEmpresaId] = useState("");
+  const [sucursalId, setSucursalId] = useState("");
+
+  useEffect(() => {
+    let activo = true;
+
+    listarHoldingsRequest()
+      .then((data) => {
+        if (activo) setHoldings(data);
+      })
+      .catch(() => {
+        if (activo) setError("Error al cargar holdings");
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const cargarEmpresasPorHolding = async (idHolding: string) => {
     try {
-      const data = await listarTrabajadoresRequest();
-      setTrabajadores(data);
+      const holding = await obtenerHoldingRequest(Number(idHolding));
+
+      const empresasDelHolding = holding.empresas.map((item) => ({
+        id: item.Empresa.id,
+        nombre: item.Empresa.nombre,
+        rut: item.Empresa.rut,
+        Sucursal: item.Empresa.Sucursal || [],
+      }));
+
+      setEmpresas(empresasDelHolding);
     } catch {
-      setError("Error al cargar trabajadores");
+      setError("Error al cargar empresas del holding");
     }
   };
 
-  useEffect(() => {
-    cargarTrabajadores();
-  }, []);
+  const cargarTrabajadores = async (
+    idEmpresa = empresaId,
+    idSucursal = sucursalId
+  ) => {
+    if (!idEmpresa || !idSucursal) {
+      setTrabajadores([]);
+      return;
+    }
+
+    try {
+      const data = await listarTrabajadoresRequest({
+        empresaId: Number(idEmpresa),
+        sucursalId: Number(idSucursal),
+      });
+
+      setTrabajadores(data);
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al cargar trabajadores"));
+    }
+  };
+
+  const handleHoldingChange = async (value: string) => {
+    setHoldingId(value);
+    setEmpresaId("");
+    setSucursalId("");
+    setEmpresas([]);
+    setSucursales([]);
+    setTrabajadores([]);
+    setBusqueda("");
+    setError("");
+
+    if (value) {
+      await cargarEmpresasPorHolding(value);
+    }
+  };
+
+  const handleEmpresaChange = (value: string) => {
+    setEmpresaId(value);
+    setSucursalId("");
+    setTrabajadores([]);
+    setBusqueda("");
+    setError("");
+
+    const empresaSeleccionada = empresas.find(
+      (empresa) => empresa.id === Number(value)
+    );
+
+    setSucursales(empresaSeleccionada?.Sucursal || []);
+  };
+
+  const handleSucursalChange = async (value: string) => {
+    setSucursalId(value);
+    setBusqueda("");
+    setError("");
+
+    if (empresaId && value) {
+      await cargarTrabajadores(empresaId, value);
+    } else {
+      setTrabajadores([]);
+    }
+  };
 
   const trabajadoresFiltrados = useMemo(() => {
     return trabajadores.filter((t) => {
+      const textoBusqueda = busqueda.toLowerCase();
+
       const coincideBusqueda =
         !busqueda ||
-        t.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        t.apellido.toLowerCase().includes(busqueda.toLowerCase()) ||
-        t.rut.toLowerCase().includes(busqueda.toLowerCase());
+        t.nombre.toLowerCase().includes(textoBusqueda) ||
+        t.apellido.toLowerCase().includes(textoBusqueda) ||
+        t.rut.toLowerCase().includes(textoBusqueda);
 
       const coincideActivo =
         filtroActivo === "todos" ||
@@ -95,6 +214,7 @@ export default function Trabajadores() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
+
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -115,10 +235,11 @@ export default function Trabajadores() {
         await crearTrabajadorRequest(form);
         setMensaje("Trabajador creado correctamente");
       }
+
       cerrarModal();
       await cargarTrabajadores();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al guardar trabajador");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al guardar trabajador"));
     } finally {
       setLoading(false);
     }
@@ -128,14 +249,15 @@ export default function Trabajadores() {
     const confirmar = confirm(
       `¿Eliminar a ${t.nombre} ${t.apellido}? Esta acción no se puede deshacer.`
     );
+
     if (!confirmar) return;
 
     try {
       await eliminarTrabajadorRequest(t.id);
       setMensaje("Trabajador eliminado correctamente");
       await cargarTrabajadores();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Error al eliminar trabajador");
+    } catch (err) {
+      setError(obtenerMensajeError(err, "Error al eliminar trabajador"));
     }
   };
 
@@ -148,7 +270,8 @@ export default function Trabajadores() {
           </p>
           <h2 className="text-3xl font-black text-slate-900">Trabajadores</h2>
           <p className="mt-2 max-w-2xl text-slate-500">
-            Administra el registro de trabajadores disponibles para asignación.
+            Selecciona un holding, empresa y sucursal para visualizar sus
+            trabajadores.
           </p>
         </div>
 
@@ -172,19 +295,75 @@ export default function Trabajadores() {
         </div>
       )}
 
+      <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-black text-slate-900">
+          Filtros de ubicación
+        </h3>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <select
+            value={holdingId}
+            onChange={(e) => handleHoldingChange(e.target.value)}
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+          >
+            <option value="">Seleccionar holding</option>
+            {holdings.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.nombre}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={empresaId}
+            disabled={!holdingId}
+            onChange={(e) => handleEmpresaChange(e.target.value)}
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none disabled:bg-slate-100 disabled:text-slate-400 focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+          >
+            <option value="">Seleccionar empresa</option>
+            {empresas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sucursalId}
+            disabled={!empresaId}
+            onChange={(e) => handleSucursalChange(e.target.value)}
+            className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none disabled:bg-slate-100 disabled:text-slate-400 focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+          >
+            <option value="">Seleccionar sucursal</option>
+            {sucursales.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+                {s.comuna ? ` - ${s.comuna}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-bold text-slate-500">Total registrados</p>
           <p className="mt-3 text-4xl font-black text-slate-900">
             {trabajadores.length}
           </p>
-          <p className="mt-2 text-sm text-slate-500">Trabajadores en el sistema.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Trabajadores de la sucursal seleccionada.
+          </p>
         </div>
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-bold text-slate-500">Activos</p>
-          <p className="mt-3 text-4xl font-black text-slate-900">{totalActivos}</p>
-          <p className="mt-2 text-sm text-slate-500">Disponibles para asignación.</p>
+          <p className="mt-3 text-4xl font-black text-slate-900">
+            {totalActivos}
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            Disponibles para asignación.
+          </p>
         </div>
 
         <div className="rounded-3xl border border-slate-200 bg-[#4E1743] p-6 text-white shadow-sm">
@@ -274,7 +453,6 @@ export default function Trabajadores() {
                   </td>
 
                   <td className="py-4 text-slate-600">{t.telefono || "-"}</td>
-
                   <td className="py-4 text-slate-600">{t.email || "-"}</td>
 
                   <td className="py-4">
@@ -297,6 +475,7 @@ export default function Trabajadores() {
                       >
                         Editar
                       </button>
+
                       <button
                         onClick={() => eliminarTrabajador(t)}
                         className="rounded-xl bg-red-50 px-4 py-2 font-bold text-red-700 transition hover:bg-red-100"
@@ -311,9 +490,11 @@ export default function Trabajadores() {
               {trabajadoresFiltrados.length === 0 && (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-500">
-                    {busqueda || filtroActivo !== "todos"
+                    {!sucursalId
+                      ? "Seleccione un holding, empresa y sucursal para visualizar trabajadores."
+                      : busqueda || filtroActivo !== "todos"
                       ? "No se encontraron trabajadores con ese criterio."
-                      : "No hay trabajadores registrados."}
+                      : "No hay trabajadores registrados para esta sucursal."}
                   </td>
                 </tr>
               )}
