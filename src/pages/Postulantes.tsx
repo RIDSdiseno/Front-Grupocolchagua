@@ -26,9 +26,9 @@ const estadoConfig: Record<Estado, { color: string; bg: string }> = {
 const estadosLista: Estado[] = ["Pendiente", "En revisión", "Entrevista", "Aceptado", "Rechazado"];
 
 const datosIniciales: Postulante[] = [
-  { id: 1, nombre: "Valentina Torres",  email: "v.torres@gmail.com",  telefono: "+56 9 1234 5678", cargo: "Analista Contable",  empresa: "Viña Colchagua",  fechaPostulacion: "2025-05-10", estado: "Entrevista",  nota: "Experiencia sólida en contabilidad." },
-  { id: 2, nombre: "Rodrigo Muñoz",     email: "r.munoz@hotmail.com", telefono: "+56 9 8765 4321", cargo: "Operario de Bodega", empresa: "Agrícola Sur",    fechaPostulacion: "2025-05-12", estado: "Pendiente" },
-  { id: 3, nombre: "Camila Reyes",      email: "creyes@gmail.com",    telefono: "+56 9 5555 1234", cargo: "Jefa de Turno",      empresa: "Viña Colchagua",  fechaPostulacion: "2025-05-08", estado: "Aceptado",    nota: "Perfil ideal para el cargo." },
+  { id: 1, nombre: "Valentina Torres",  email: "v.torres@gmail.com",  telefono: "+56 9 1234 5678", cargo: "Analista Contable",  empresa: "Grupo Colchagua",  fechaPostulacion: "2025-05-10", estado: "Entrevista",  nota: "Experiencia sólida en contabilidad." },
+  { id: 2, nombre: "Rodrigo Muñoz",     email: "r.munoz@hotmail.com", telefono: "+56 9 8765 4321", cargo: "Operario de Bodega", empresa: "Grupo Colchagua",    fechaPostulacion: "2025-05-12", estado: "Pendiente" },
+  { id: 3, nombre: "Camila Reyes",      email: "creyes@gmail.com",    telefono: "+56 9 5555 1234", cargo: "Jefa de Turno",      empresa: "Grupo Santacruz",  fechaPostulacion: "2025-05-08", estado: "Aceptado",    nota: "Perfil ideal para el cargo." },
   { id: 4, nombre: "Felipe Araya",      email: "faraya@yahoo.com",    telefono: "+56 9 9999 8888", cargo: "Administrativo",     empresa: "Grupo Colchagua", fechaPostulacion: "2025-05-14", estado: "En revisión" },
   { id: 5, nombre: "Sofía Gutiérrez",   email: "sofia.g@gmail.com",   telefono: "+56 9 7777 2222", cargo: "Asistente de RRHH",  empresa: "Grupo Colchagua", fechaPostulacion: "2025-05-11", estado: "Rechazado",   nota: "No cumple requisitos mínimos." },
 ];
