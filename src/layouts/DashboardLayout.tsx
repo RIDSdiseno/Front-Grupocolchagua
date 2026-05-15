@@ -1,4 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  LayoutDashboard, Users, Building2, MapPin, Briefcase,
+  Link, ClipboardList, FileText, UserSearch, Mail, UserCog,
+} from "lucide-react";
 
 interface Props {
   children: React.ReactNode;
@@ -8,15 +12,17 @@ const logo =
   "https://res.cloudinary.com/dvqpmttci/image/upload/v1777584212/logocolchagua2_bbk1sv.png";
 
 const menuItems = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Trabajadores", path: "/trabajadores" },
-  { label: "Empresas", path: "/empresas" },
-  { label: "Sucursales", path: "/sucursales" },
-  { label: "Cargos", path: "/cargos" },
-  { label: "Asignaciones", path: "/asignaciones" },
-  { label: "Asistencia", path: "/asistencia" },
-  { label: "Liquidaciones", path: "/liquidaciones" },
-  { label: "Usuarios", path: "/usuarios" },
+  { label: "Dashboard",    path: "/dashboard",    Icon: LayoutDashboard },
+  { label: "Trabajadores", path: "/trabajadores", Icon: Users },
+  { label: "Empresas",     path: "/empresas",     Icon: Building2 },
+  { label: "Sucursales",   path: "/sucursales",   Icon: MapPin },
+  { label: "Cargos",       path: "/cargos",       Icon: Briefcase },
+  { label: "Asignaciones", path: "/asignaciones", Icon: Link },
+  { label: "Asistencia",   path: "/asistencia",   Icon: ClipboardList },
+  { label: "Liquidaciones",path: "/liquidaciones",Icon: FileText },
+  { label: "Postulantes",  path: "/postulantes",  Icon: UserSearch },
+  { label: "Mailing",      path: "/mailing",      Icon: Mail },
+  { label: "Usuarios",     path: "/usuarios",     Icon: UserCog },
 ];
 
 export default function DashboardLayout({ children }: Props) {
@@ -42,7 +48,7 @@ export default function DashboardLayout({ children }: Props) {
           />
         </div>
 
-        <nav className="flex-1 space-y-2 p-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
           {menuItems.map((item) => {
             const activo = location.pathname === item.path;
 
@@ -50,12 +56,13 @@ export default function DashboardLayout({ children }: Props) {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`w-full rounded-xl px-4 py-3 text-left font-semibold transition-all duration-200 ${
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-semibold transition-all duration-200 ${
                   activo
                     ? "bg-white text-[#4E1743] shadow-md"
                     : "text-white/90 hover:translate-x-1 hover:bg-white/10"
                 }`}
               >
+                <item.Icon size={18} className={activo ? "text-[#4E1743]" : "text-white/70"} />
                 {item.label}
               </button>
             );
@@ -86,7 +93,6 @@ export default function DashboardLayout({ children }: Props) {
             <h1 className="truncate text-xl font-bold text-slate-800 sm:text-2xl">
               Panel de control
             </h1>
-
             <p className="truncate text-sm text-slate-500">
               Bienvenido, {usuario.nombre || "Usuario"}
             </p>
@@ -101,9 +107,7 @@ export default function DashboardLayout({ children }: Props) {
         </header>
 
         <section className="min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 lg:p-8">
-          <div className="min-w-0 max-w-full overflow-hidden">
-            {children}
-          </div>
+          <div className="min-w-0 max-w-full overflow-hidden">{children}</div>
         </section>
       </main>
     </div>

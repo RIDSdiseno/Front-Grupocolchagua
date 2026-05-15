@@ -9,6 +9,8 @@ import Asignaciones from "./pages/Asignaciones";
 import Asistencia from "./pages/Asistencia";
 import Sucursales from "./pages/Sucursales";
 import Usuarios from "./pages/Usuarios";
+import Postulantes from "./pages/Postulantes";
+import Mailing from "./pages/Mailing";
 
 function App() {
   return (
@@ -84,6 +86,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Usuarios />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/postulantes"
+          element={
+            <ProtectedRoute>
+              <Postulantes />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/mailing"
+          element={
+            <ProtectedRoute>
+              <Mailing />
             </ProtectedRoute>
           }
         />
