@@ -69,15 +69,29 @@ export default function AsociarCargoModal({
 
   const totalMensual =
     Number(form.sueldoBase || 0) +
-    Number(form.bonoColacion || 0) +
-    Number(form.bonoLocomocion || 0) +
     Number(form.bonoAsistencia || 0) +
+    Number(form.bonoCaja || 0) +
+    Number(form.bonoResponsabilidad || 0) +
+    Number(form.bonoColacion || 0) +
+    Number(form.bonoMovilizacion || 0) +
     Number(form.bonoNoche || 0) +
     Number(form.otrosBonos || 0);
 
+  const campos = [
+    ["sueldoBase", "Sueldo base", "Ej: 539000"],
+    ["bonoAsistencia", "Bono asistencia", "Ej: 30000"],
+    ["bonoCaja", "Bono caja", "Ej: 15000"],
+    ["bonoResponsabilidad", "Bono responsabilidad", "Ej: 20000"],
+    ["bonoColacion", "Bono colación", "Ej: 25000"],
+    ["bonoMovilizacion", "Bono movilización", "Ej: 25000"],
+    ["bonoNoche", "Bono noche", "Ej: 20000"],
+    ["otrosBonos", "Otros bonos", "Ej: 10000"],
+    ["valorHoraExtra", "Valor hora extra", "Ej: 4500"],
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-4">
           <div>
             <h3 className="text-lg font-black text-[#4E1743]">
@@ -165,15 +179,7 @@ export default function AsociarCargoModal({
             </h4>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[
-                ["sueldoBase", "Sueldo base", "Ej: 539000"],
-                ["bonoColacion", "Bono colación", "Ej: 25000"],
-                ["bonoLocomocion", "Bono locomoción", "Ej: 25000"],
-                ["bonoAsistencia", "Bono asistencia", "Ej: 30000"],
-                ["bonoNoche", "Bono noche", "Ej: 20000"],
-                ["otrosBonos", "Otros bonos", "Ej: 10000"],
-                ["valorHoraExtra", "Valor hora extra", "Ej: 4500"],
-              ].map(([field, label, placeholder]) => (
+              {campos.map(([field, label, placeholder]) => (
                 <div key={field}>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     {label}
@@ -232,7 +238,12 @@ export default function AsociarCargoModal({
 
             <button
               type="submit"
-              disabled={loading || !form.sucursalId || !form.cargoId || !form.sueldoBase}
+              disabled={
+                loading ||
+                !form.sucursalId ||
+                !form.cargoId ||
+                !form.sueldoBase
+              }
               className="flex-1 rounded-2xl bg-[#4E1743] px-4 py-3 font-black text-white hover:bg-[#3d1235] disabled:opacity-60"
             >
               {loading ? "Guardando..." : editando ? "Actualizar" : "Crear tarifa"}

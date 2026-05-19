@@ -55,9 +55,11 @@ const tarifaFormInicial: TarifaForm = {
   sucursalId: "",
   cargoId: "",
   sueldoBase: "",
-  bonoColacion: "",
-  bonoLocomocion: "",
   bonoAsistencia: "",
+  bonoCaja: "",
+  bonoResponsabilidad: "",
+  bonoColacion: "",
+  bonoMovilizacion: "",
   bonoNoche: "",
   otrosBonos: "",
   valorHoraExtra: "",
@@ -65,16 +67,20 @@ const tarifaFormInicial: TarifaForm = {
 
 const calcularTotalMensual = (tarifa: Tarifa) =>
   Number(tarifa.sueldoBase || 0) +
-  Number(tarifa.bonoColacion || 0) +
-  Number(tarifa.bonoLocomocion || 0) +
   Number(tarifa.bonoAsistencia || 0) +
+  Number(tarifa.bonoCaja || 0) +
+  Number(tarifa.bonoResponsabilidad || 0) +
+  Number(tarifa.bonoColacion || 0) +
+  Number(tarifa.bonoMovilizacion || 0) +
   Number(tarifa.bonoNoche || 0) +
   Number(tarifa.otrosBonos || 0);
 
 const calcularTotalBonos = (tarifa: Tarifa) =>
-  Number(tarifa.bonoColacion || 0) +
-  Number(tarifa.bonoLocomocion || 0) +
   Number(tarifa.bonoAsistencia || 0) +
+  Number(tarifa.bonoCaja || 0) +
+  Number(tarifa.bonoResponsabilidad || 0) +
+  Number(tarifa.bonoColacion || 0) +
+  Number(tarifa.bonoMovilizacion || 0) +
   Number(tarifa.bonoNoche || 0) +
   Number(tarifa.otrosBonos || 0);
 
@@ -95,6 +101,7 @@ export default function Cargos() {
   const [loadingTarifas, setLoadingTarifas] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const [busquedaCargo, setBusquedaCargo] = useState("");
 
   const [modalCargoOpen, setModalCargoOpen] = useState(false);
   const [modalAsociarOpen, setModalAsociarOpen] = useState(false);
@@ -141,6 +148,24 @@ export default function Cargos() {
 
     return data;
   }, [tarifas, sucursales, sucursalId]);
+
+  const tarifasBuscadas = useMemo(() => {
+    const texto = busquedaCargo.trim().toLowerCase();
+
+    if (!texto) return tarifasFiltradas;
+
+    return tarifasFiltradas.filter((tarifa) => {
+      const cargo = tarifa.Cargo?.nombre?.toLowerCase() || "";
+      const sucursal = tarifa.Sucursal?.nombre?.toLowerCase() || "";
+      const idTarifa = String(tarifa.id);
+
+      return (
+        cargo.includes(texto) ||
+        sucursal.includes(texto) ||
+        idTarifa.includes(texto)
+      );
+    });
+  }, [tarifasFiltradas, busquedaCargo]);
 
   const opcionesCargos = useMemo(
     () => cargos.map((c) => ({ value: c.id, label: c.nombre })),
@@ -282,6 +307,7 @@ export default function Cargos() {
     setEditando(null);
     setMensaje("");
     setError("");
+    setBusquedaCargo("");
     setFormSucursal({
       ...formSucursalInicial,
       holdingId: id,
@@ -297,6 +323,7 @@ export default function Cargos() {
     setEditando(null);
     setMensaje("");
     setError("");
+    setBusquedaCargo("");
   };
 
   const handleSucursalChange = (value: string) => {
@@ -305,6 +332,7 @@ export default function Cargos() {
     setEditando(null);
     setMensaje("");
     setError("");
+    setBusquedaCargo("");
   };
 
   const abrirAsociar = () => {
@@ -324,9 +352,11 @@ export default function Cargos() {
       sucursalId: tarifa.sucursalId,
       cargoId: tarifa.cargoId,
       sueldoBase: String(tarifa.sueldoBase || ""),
-      bonoColacion: String(tarifa.bonoColacion || ""),
-      bonoLocomocion: String(tarifa.bonoLocomocion || ""),
       bonoAsistencia: String(tarifa.bonoAsistencia || ""),
+      bonoCaja: String(tarifa.bonoCaja || ""),
+      bonoResponsabilidad: String(tarifa.bonoResponsabilidad || ""),
+      bonoColacion: String(tarifa.bonoColacion || ""),
+      bonoMovilizacion: String(tarifa.bonoMovilizacion || ""),
       bonoNoche: String(tarifa.bonoNoche || ""),
       otrosBonos: String(tarifa.otrosBonos || ""),
       valorHoraExtra: String(tarifa.valorHoraExtra || ""),
@@ -726,6 +756,24 @@ export default function Cargos() {
           <p className="text-sm text-slate-500">
             Lista de sueldos base, bonos y valores por cargo/sucursal.
           </p>
+
+          {empresaSeleccionada && tarifasFiltradas.length > 0 && (
+            <div className="mt-4">
+              <input
+                type="text"
+                value={busquedaCargo}
+                onChange={(e) => setBusquedaCargo(e.target.value)}
+                placeholder="Buscar por cargo, sucursal o ID de tarifa..."
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#4E1743] focus:ring-4 focus:ring-[#4E1743]/10 sm:text-base"
+              />
+
+              {busquedaCargo.trim() && (
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  {tarifasBuscadas.length} resultado(s) encontrados.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {!holdingId ? (
@@ -750,11 +798,15 @@ export default function Cargos() {
               ? `"${sucursalSeleccionada.nombre}" aún no tiene tarifas asociadas.`
               : "Esta empresa aún no tiene tarifas asociadas."}
           </div>
+        ) : tarifasBuscadas.length === 0 ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
+            No se encontraron cargos que coincidan con "{busquedaCargo}".
+          </div>
         ) : (
           <>
             <div className="max-h-[65vh] overflow-y-auto pr-1 lg:hidden">
               <div className="grid grid-cols-1 gap-4">
-                {tarifasFiltradas.map((tarifa) => {
+                {tarifasBuscadas.map((tarifa) => {
                   const totalBonos = calcularTotalBonos(tarifa);
 
                   return (
@@ -853,7 +905,7 @@ export default function Cargos() {
                   </thead>
 
                   <tbody>
-                    {tarifasFiltradas.map((tarifa) => {
+                    {tarifasBuscadas.map((tarifa) => {
                       const totalBonos = calcularTotalBonos(tarifa);
 
                       return (

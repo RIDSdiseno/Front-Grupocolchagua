@@ -9,9 +9,11 @@ export interface Tarifa {
   cargoId: number;
 
   sueldoBase: number;
-  bonoColacion: number;
-  bonoLocomocion: number;
   bonoAsistencia: number;
+  bonoCaja: number;
+  bonoResponsabilidad: number;
+  bonoColacion: number;
+  bonoMovilizacion: number;
   bonoNoche: number;
   otrosBonos: number;
   valorHoraExtra: number;
@@ -26,9 +28,11 @@ export interface TarifaForm {
   cargoId: number | "";
 
   sueldoBase: string;
-  bonoColacion: string;
-  bonoLocomocion: string;
   bonoAsistencia: string;
+  bonoCaja: string;
+  bonoResponsabilidad: string;
+  bonoColacion: string;
+  bonoMovilizacion: string;
   bonoNoche: string;
   otrosBonos: string;
   valorHoraExtra: string;
