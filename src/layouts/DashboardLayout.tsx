@@ -1,7 +1,17 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
 import {
-  LayoutDashboard, Users, Building2, MapPin, Briefcase,
-  Link, ClipboardList, FileText, UserSearch, Mail, UserCog,
+  LayoutDashboard,
+  Users,
+  Building2,
+  MapPin,
+  Briefcase,
+  Link,
+  ClipboardList,
+  FileText,
+  UserSearch,
+  Mail,
+  UserCog,
 } from "lucide-react";
 
 interface Props {
@@ -12,29 +22,37 @@ const logo =
   "https://res.cloudinary.com/dvqpmttci/image/upload/v1777584212/logocolchagua2_bbk1sv.png";
 
 const menuItems = [
-  { label: "Dashboard",    path: "/dashboard",    Icon: LayoutDashboard },
+  { label: "Dashboard", path: "/dashboard", Icon: LayoutDashboard },
   { label: "Trabajadores", path: "/trabajadores", Icon: Users },
-  { label: "Empresas",     path: "/empresas",     Icon: Building2 },
-  { label: "Sucursales",   path: "/sucursales",   Icon: MapPin },
-  { label: "Cargos",       path: "/cargos",       Icon: Briefcase },
+  { label: "Empresas", path: "/empresas", Icon: Building2 },
+  { label: "Sucursales", path: "/sucursales", Icon: MapPin },
+  { label: "Cargos", path: "/cargos", Icon: Briefcase },
   { label: "Asignaciones", path: "/asignaciones", Icon: Link },
-  { label: "Asistencia",   path: "/asistencia",   Icon: ClipboardList },
-  { label: "Liquidaciones",path: "/liquidaciones",Icon: FileText },
-  { label: "Postulantes",  path: "/postulantes",  Icon: UserSearch },
-  { label: "Mailing",      path: "/mailing",      Icon: Mail },
-  { label: "Usuarios",     path: "/usuarios",     Icon: UserCog },
+  { label: "Asistencia", path: "/asistencia", Icon: ClipboardList },
+  { label: "Preliquidaciones", path: "/preliquidaciones", Icon: FileText },
+  { label: "Postulantes", path: "/postulantes", Icon: UserSearch },
+  { label: "Mailing", path: "/mailing", Icon: Mail },
+  { label: "Usuarios", path: "/usuarios", Icon: UserCog },
 ];
 
 export default function DashboardLayout({ children }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { instance } = useMsal();
 
   const usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
 
-  const logout = () => {
+  const logout = async () => {
     localStorage.removeItem("token");
     localStorage.removeItem("usuario");
-    navigate("/login");
+
+    const accounts = instance.getAllAccounts();
+
+    for (const account of accounts) {
+      await instance.clearCache({ account });
+    }
+
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -62,7 +80,10 @@ export default function DashboardLayout({ children }: Props) {
                     : "text-white/90 hover:translate-x-1 hover:bg-white/10"
                 }`}
               >
-                <item.Icon size={18} className={activo ? "text-[#4E1743]" : "text-white/70"} />
+                <item.Icon
+                  size={18}
+                  className={activo ? "text-[#4E1743]" : "text-white/70"}
+                />
                 {item.label}
               </button>
             );

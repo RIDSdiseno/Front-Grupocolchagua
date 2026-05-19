@@ -4,6 +4,15 @@ export type EstadoMailing =
   | "ENVIADA"
   | "ENVIADA_CON_ERRORES";
 
+export interface MailingAdjunto {
+  id?: number;
+  nombre: string;
+  url?: string;
+  mimeType?: string;
+  size?: number;
+  createdAt?: string;
+}
+
 export interface MailingCampana {
   id: number;
   asunto: string;
@@ -16,8 +25,11 @@ export interface MailingCampana {
   createdAt: string;
   updatedAt: string;
 
+  adjuntos?: MailingAdjunto[];
+
   _count?: {
     destinatarios: number;
+    adjuntos?: number;
   };
 }
 
@@ -27,4 +39,5 @@ export interface CrearCampanaPayload {
   grupo: string;
   emailsPersonalizados?: string;
   fechaProgramada?: string | null;
+  archivos?: File[];
 }

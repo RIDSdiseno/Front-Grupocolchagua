@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import CeldaAsistenciaModal from "../components/asistencia/CeldaAsistenciaModal";
 import type { Asistencia, AsistenciaForm } from "../types/asistencia";
 import type { Asignacion } from "../types/asignacion";
+import type { TipoIncidencia, TipoIncidenciaModal } from "../types/incidencias";
 import {
   listarAsistenciaRequest,
   registrarAsistenciaRequest,
   eliminarAsistenciaRequest,
+  registrarAsistenciaMasivaRequest,
 } from "../services/asistencia.service";
+import { crearIncidenciaRequest } from "../services/incidencias.service";
 import { listarAsignacionesRequest } from "../services/asignacion.service";
 import {
   listarHoldingsRequest,
@@ -31,14 +34,51 @@ interface EmpresaOption {
   Sucursal: SucursalOption[];
 }
 
-const ESTADO_CONFIG: Record<string, { bg: string; text: string; label: string }> =
-  {
-    A: { bg: "bg-green-100", text: "text-green-800", label: "A" },
-    L: { bg: "bg-slate-100", text: "text-slate-500", label: "L" },
-    F: { bg: "bg-red-100", text: "text-red-700", label: "F" },
-  };
+interface IncidenciaFormModal {
+  tipo: TipoIncidenciaModal;
+  minutos: number;
+  monto: number;
+  observacion: string;
+}
+
+interface BulkForm {
+  estado: "A" | "L" | "F";
+  horasExtras: number;
+  turno: "diurno" | "nocturno";
+  observacion: string;
+}
+
+interface CeldaSeleccionada {
+  key: string;
+  trabajadorId: number;
+  fecha: string;
+  cargoId: number;
+  sucursalId?: number | null;
+}
+
+type EstadoVisual = "A" | "L" | "F";
+
+const ESTADO_CONFIG: Record<EstadoVisual, { bg: string; text: string; label: string }> = {
+  A: { bg: "bg-green-100", text: "text-green-800", label: "A" },
+  L: { bg: "bg-slate-100", text: "text-slate-500", label: "L" },
+  F: { bg: "bg-red-100", text: "text-red-700", label: "F" },
+};
 
 const formInicial: AsistenciaForm = {
+  estado: "A",
+  horasExtras: 0,
+  turno: "diurno",
+  observacion: "",
+};
+
+const incidenciaInicial: IncidenciaFormModal = {
+  tipo: "NINGUNA",
+  minutos: 0,
+  monto: 0,
+  observacion: "",
+};
+
+const bulkInicial: BulkForm = {
   estado: "A",
   horasExtras: 0,
   turno: "diurno",
@@ -76,6 +116,49 @@ function diaDeISO(fechaStr: string): number {
   return new Date(fechaStr).getUTCDate();
 }
 
+function esDomingoFecha(año: number, mes: number, dia: number): boolean {
+  return new Date(Date.UTC(año, mes - 1, dia)).getUTCDay() === 0;
+}
+
+function obtenerEstadoVisible(
+  registro: Asistencia | undefined,
+  año: number,
+  mes: number,
+  dia: number
+): EstadoVisual | null {
+  if (registro?.estado === "A" || registro?.estado === "L" || registro?.estado === "F") {
+    return registro.estado;
+  }
+
+  if (esDomingoFecha(año, mes, dia)) {
+    return "L";
+  }
+
+  return null;
+}
+
+function obtenerFormInicialCelda(
+  registro: Asistencia | null,
+  año: number,
+  mes: number,
+  dia: number
+): AsistenciaForm {
+  if (registro) {
+    return {
+      estado: registro.estado,
+      horasExtras: registro.horasExtras,
+      turno: registro.turno,
+      observacion: registro.observacion || "",
+    };
+  }
+
+  return {
+    ...formInicial,
+    estado: esDomingoFecha(año, mes, dia) ? "L" : "A",
+    horasExtras: 0,
+  };
+}
+
 export default function Asistencia() {
   const hoy = new Date();
 
@@ -94,12 +177,23 @@ export default function Asistencia() {
   const [registros, setRegistros] = useState<Asistencia[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [modoMultiple, setModoMultiple] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [cargandoGrilla, setCargandoGrilla] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
 
   const [celdaForm, setCeldaForm] = useState<AsistenciaForm>(formInicial);
+  const [incidenciaForm, setIncidenciaForm] =
+    useState<IncidenciaFormModal>(incidenciaInicial);
+  const [bulkForm, setBulkForm] = useState<BulkForm>(bulkInicial);
+
+  const [seleccionadas, setSeleccionadas] = useState<
+    Map<string, CeldaSeleccionada>
+  >(new Map());
+
   const [celdaTrabajador, setCeldaTrabajador] = useState<{
     id: number;
     nombre: string;
@@ -121,23 +215,18 @@ export default function Asistencia() {
     return registros;
   }, [holdingId, empresaId, sucursalId, registros]);
 
-  useEffect(() => {
-    let activo = true;
+  const dias = useMemo(() => diasDelMes(año, mes), [año, mes]);
 
-    listarHoldingsRequest()
-      .then((data) => {
-        if (activo) setHoldings(data);
-      })
-      .catch(() => {
-        if (activo) setError("Error al cargar holdings");
-      });
-
-    return () => {
-      activo = false;
-    };
+  const cargarHoldings = useCallback(async () => {
+    try {
+      const data = await listarHoldingsRequest();
+      setHoldings(data);
+    } catch {
+      setError("Error al cargar holdings");
+    }
   }, []);
 
-  const cargarGrilla = async () => {
+  const cargarGrilla = useCallback(async () => {
     if (!holdingId || !empresaId || !sucursalId) return;
 
     setCargandoGrilla(true);
@@ -169,65 +258,36 @@ export default function Asistencia() {
 
       setAsignaciones(activas);
       setRegistros(regs);
+      setSeleccionadas(new Map());
+      setModoMultiple(false);
     } catch (err) {
       setError(obtenerMensajeError(err, "Error al cargar asistencia"));
     } finally {
       setCargandoGrilla(false);
     }
-  };
+  }, [holdingId, empresaId, sucursalId, mes, año]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void cargarHoldings();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [cargarHoldings]);
 
   useEffect(() => {
     if (!holdingId || !empresaId || !sucursalId) return;
 
-    let activo = true;
-
-    void (async () => {
-      setCargandoGrilla(true);
-      setError("");
-
-      try {
-        const [asig, regs] = await Promise.all([
-          listarAsignacionesRequest({
-            empresaId: Number(empresaId),
-            sucursalId: Number(sucursalId),
-          }),
-          listarAsistenciaRequest({
-            holdingId: Number(holdingId),
-            empresaId: Number(empresaId),
-            sucursalId: Number(sucursalId),
-            mes,
-            año,
-          }),
-        ]);
-
-        if (!activo) return;
-
-        const inicioMes = new Date(Date.UTC(año, mes - 1, 1));
-        const finMes = new Date(Date.UTC(año, mes, 0));
-
-        const activas = asig.filter((a: Asignacion) => {
-          const inicio = new Date(a.fechaInicio);
-          const fin = a.fechaFin ? new Date(a.fechaFin) : null;
-          return inicio <= finMes && (!fin || fin >= inicioMes);
-        });
-
-        setAsignaciones(activas);
-        setRegistros(regs);
-      } catch (err) {
-        if (activo) {
-          setError(obtenerMensajeError(err, "Error al cargar asistencia"));
-        }
-      } finally {
-        if (activo) {
-          setCargandoGrilla(false);
-        }
-      }
-    })();
+    const timeout = window.setTimeout(() => {
+      void cargarGrilla();
+    }, 0);
 
     return () => {
-      activo = false;
+      window.clearTimeout(timeout);
     };
-  }, [holdingId, empresaId, sucursalId, mes, año]);
+  }, [holdingId, empresaId, sucursalId, mes, año, cargarGrilla]);
 
   const handleHoldingChange = async (value: string) => {
     setHoldingId(value ? Number(value) : "");
@@ -237,6 +297,8 @@ export default function Asistencia() {
     setSucursales([]);
     setAsignaciones([]);
     setRegistros([]);
+    setSeleccionadas(new Map());
+    setModoMultiple(false);
     setError("");
     setMensaje("");
 
@@ -265,6 +327,8 @@ export default function Asistencia() {
     setSucursalId("");
     setAsignaciones([]);
     setRegistros([]);
+    setSeleccionadas(new Map());
+    setModoMultiple(false);
     setError("");
     setMensaje("");
 
@@ -276,11 +340,11 @@ export default function Asistencia() {
     setSucursalId(value ? Number(value) : "");
     setAsignaciones([]);
     setRegistros([]);
+    setSeleccionadas(new Map());
+    setModoMultiple(false);
     setError("");
     setMensaje("");
   };
-
-  const dias = useMemo(() => diasDelMes(año, mes), [año, mes]);
 
   const registroIndex = useMemo(() => {
     const idx = new Map<string, Asistencia>();
@@ -326,6 +390,11 @@ export default function Asistencia() {
     dia: number,
     registroExistente: Asistencia | null
   ) => {
+    if (modoMultiple) {
+      toggleSeleccion(asignacion, dia);
+      return;
+    }
+
     setCeldaTrabajador({
       id: asignacion.trabajadorId,
       nombre: asignacion.Trabajador.nombre,
@@ -336,21 +405,108 @@ export default function Asistencia() {
 
     setCeldaFecha(toISOLocal(año, mes, dia));
     setCeldaRegistro(registroExistente);
-
-    setCeldaForm(
-      registroExistente
-        ? {
-            estado: registroExistente.estado,
-            horasExtras: registroExistente.horasExtras,
-            turno: registroExistente.turno,
-            observacion: registroExistente.observacion || "",
-          }
-        : { ...formInicial }
-    );
+    setIncidenciaForm(incidenciaInicial);
+    setCeldaForm(obtenerFormInicialCelda(registroExistente, año, mes, dia));
 
     setError("");
     setMensaje("");
     setModalOpen(true);
+  };
+
+  const toggleSeleccion = (asignacion: Asignacion, dia: number) => {
+    const fecha = toISOLocal(año, mes, dia);
+    const key = `${asignacion.trabajadorId}-${dia}`;
+
+    setSeleccionadas((prev) => {
+      const next = new Map(prev);
+
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.set(key, {
+          key,
+          trabajadorId: asignacion.trabajadorId,
+          fecha,
+          cargoId: asignacion.cargoId,
+          sucursalId: asignacion.sucursalId,
+        });
+      }
+
+      return next;
+    });
+  };
+
+  const activarModoMultiple = () => {
+    setModoMultiple((prev) => {
+      const nuevo = !prev;
+
+      if (!nuevo) {
+        setSeleccionadas(new Map());
+      }
+
+      return nuevo;
+    });
+
+    setError("");
+    setMensaje("");
+  };
+
+  const seleccionarFila = (asignacion: Asignacion) => {
+    setSeleccionadas((prev) => {
+      const next = new Map(prev);
+
+      const todosSeleccionados = dias.every((d) =>
+        next.has(`${asignacion.trabajadorId}-${d}`)
+      );
+
+      if (todosSeleccionados) {
+        dias.forEach((d) => {
+          next.delete(`${asignacion.trabajadorId}-${d}`);
+        });
+      } else {
+        dias.forEach((d) => {
+          const fecha = toISOLocal(año, mes, d);
+          next.set(`${asignacion.trabajadorId}-${d}`, {
+            key: `${asignacion.trabajadorId}-${d}`,
+            trabajadorId: asignacion.trabajadorId,
+            fecha,
+            cargoId: asignacion.cargoId,
+            sucursalId: asignacion.sucursalId,
+          });
+        });
+      }
+
+      return next;
+    });
+  };
+
+  const seleccionarColumna = (dia: number) => {
+    setSeleccionadas((prev) => {
+      const next = new Map(prev);
+
+      const todosSeleccionados = trabajadoresGrilla.every((asig) =>
+        next.has(`${asig.trabajadorId}-${dia}`)
+      );
+
+      if (todosSeleccionados) {
+        trabajadoresGrilla.forEach((asig) => {
+          next.delete(`${asig.trabajadorId}-${dia}`);
+        });
+      } else {
+        trabajadoresGrilla.forEach((asig) => {
+          const fecha = toISOLocal(año, mes, dia);
+          next.set(`${asig.trabajadorId}-${dia}`, {
+            key: `${asig.trabajadorId}-${dia}`,
+            trabajadorId: asig.trabajadorId,
+            fecha,
+            cargoId: asig.cargoId,
+            sucursalId: asig.sucursalId,
+          });
+        });
+      }
+
+      return next;
+    });
   };
 
   const handleCeldaChange = (
@@ -358,6 +514,16 @@ export default function Asistencia() {
     value: string | number
   ) => {
     setCeldaForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleIncidenciaChange = (
+    field: keyof IncidenciaFormModal,
+    value: string | number
+  ) => {
+    setIncidenciaForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const handleGuardar = async () => {
@@ -379,12 +545,80 @@ export default function Asistencia() {
         observacion: celdaForm.observacion || undefined,
       });
 
+      if (incidenciaForm.tipo !== "NINGUNA") {
+        await crearIncidenciaRequest({
+          trabajadorId: celdaTrabajador.id,
+          empresaId: Number(empresaId),
+          sucursalId: Number(sucursalId),
+          cargoId: celdaTrabajador.cargoId,
+          fecha: celdaFecha,
+          tipo: incidenciaForm.tipo as TipoIncidencia,
+          minutos: Number(incidenciaForm.minutos) || 0,
+          monto: Number(incidenciaForm.monto) || 0,
+          observacion: incidenciaForm.observacion || undefined,
+        });
+      }
+
       setModalOpen(false);
-      setMensaje("Asistencia guardada correctamente");
+      setMensaje(
+        incidenciaForm.tipo !== "NINGUNA"
+          ? "Asistencia e incidencia guardadas correctamente"
+          : "Asistencia guardada correctamente"
+      );
 
       await cargarGrilla();
     } catch (err: unknown) {
       setError(obtenerMensajeError(err, "Error al guardar asistencia"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuardarMasivo = async () => {
+    if (!empresaId || !sucursalId) return;
+
+    const celdas = Array.from(seleccionadas.values());
+
+    if (celdas.length === 0) {
+      setError("Debes seleccionar al menos una celda");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMensaje("");
+
+    try {
+      const registrosMasivos = celdas.map((c) => ({
+        trabajadorId: c.trabajadorId,
+        fecha: c.fecha,
+        estado: bulkForm.estado,
+        horasExtras: Number(bulkForm.horasExtras) || 0,
+        turno: bulkForm.turno,
+        cargoId: c.cargoId,
+        empresaId: Number(empresaId),
+        sucursalId: Number(sucursalId),
+        observacion: bulkForm.observacion || undefined,
+      }));
+
+      const res = await registrarAsistenciaMasivaRequest({
+        registros: registrosMasivos,
+      });
+
+      setBulkModalOpen(false);
+      setModoMultiple(false);
+      setSeleccionadas(new Map());
+      setBulkForm(bulkInicial);
+
+      setMensaje(
+        res.errores?.length
+          ? `Se procesaron ${res.procesados} registros con algunas observaciones`
+          : `Se guardaron ${res.procesados} asistencias correctamente`
+      );
+
+      await cargarGrilla();
+    } catch (err: unknown) {
+      setError(obtenerMensajeError(err, "Error al guardar asistencia masiva"));
     } finally {
       setLoading(false);
     }
@@ -419,32 +653,42 @@ export default function Asistencia() {
       { asistio: number; libre: number; falta: number; horasExtras: number }
     >();
 
-    for (const r of registrosVisibles) {
-      if (!totales.has(r.trabajadorId)) {
-        totales.set(r.trabajadorId, {
-          asistio: 0,
-          libre: 0,
-          falta: 0,
-          horasExtras: 0,
-        });
-      }
+    for (const asig of trabajadoresGrilla) {
+      totales.set(asig.trabajadorId, {
+        asistio: 0,
+        libre: 0,
+        falta: 0,
+        horasExtras: 0,
+      });
+    }
 
-      const t = totales.get(r.trabajadorId);
+    for (const asig of trabajadoresGrilla) {
+      const t = totales.get(asig.trabajadorId);
       if (!t) continue;
 
-      if (r.estado === "A") t.asistio++;
-      if (r.estado === "L") t.libre++;
-      if (r.estado === "F") t.falta++;
-      t.horasExtras += r.horasExtras;
+      for (const d of dias) {
+        const registro = registroIndex.get(`${asig.trabajadorId}-${d}`);
+        const estado = obtenerEstadoVisible(registro, año, mes, d);
+
+        if (estado === "A") t.asistio++;
+        if (estado === "L") t.libre++;
+        if (estado === "F") t.falta++;
+
+        if (registro && estado === "A") {
+          t.horasExtras += Number(registro.horasExtras) || 0;
+        }
+      }
     }
 
     return totales;
-  }, [registrosVisibles]);
+  }, [trabajadoresGrilla, dias, registroIndex, año, mes]);
 
   const nombreMes = new Date(año, mes - 1).toLocaleDateString("es-CL", {
     month: "long",
     year: "numeric",
   });
+
+  const seleccionadasCount = seleccionadas.size;
 
   return (
     <DashboardLayout>
@@ -461,6 +705,43 @@ export default function Asistencia() {
             empresa, sucursal y mes.
           </p>
         </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={!holdingId || !empresaId || !sucursalId}
+            onClick={activarModoMultiple}
+            className={`rounded-2xl px-5 py-3 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              modoMultiple
+                ? "bg-red-100 text-red-700 hover:bg-red-200"
+                : "bg-[#4E1743] text-white hover:bg-[#3d1235]"
+            }`}
+          >
+            {modoMultiple ? "Cancelar selección" : "Selección múltiple"}
+          </button>
+
+          {modoMultiple && (
+            <>
+              <button
+                type="button"
+                disabled={seleccionadasCount === 0}
+                onClick={() => setBulkModalOpen(true)}
+                className="rounded-2xl bg-green-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Aplicar a {seleccionadasCount}
+              </button>
+
+              <button
+                type="button"
+                disabled={seleccionadasCount === 0}
+                onClick={() => setSeleccionadas(new Map())}
+                className="rounded-2xl bg-slate-200 px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Limpiar
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {mensaje && (
@@ -472,6 +753,14 @@ export default function Asistencia() {
       {error && (
         <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
           {error}
+        </div>
+      )}
+
+      {modoMultiple && (
+        <div className="mb-5 rounded-2xl border border-[#4E1743]/20 bg-[#4E1743]/5 px-5 py-4 text-sm font-semibold text-[#4E1743]">
+          Modo selección múltiple activo. Haz clic en varias celdas, en el
+          nombre del trabajador para seleccionar toda la fila o en el número
+          del día para seleccionar toda la columna.
         </div>
       )}
 
@@ -622,10 +911,13 @@ export default function Asistencia() {
 
                   {dias.map((d) => {
                     const fechaISO = toISOLocal(año, mes, d);
-                    const diaSemana = new Date(
-                      Date.UTC(año, mes - 1, d)
-                    ).getUTCDay();
-                    const esDomingo = diaSemana === 0;
+                    const esDomingo = esDomingoFecha(año, mes, d);
+                    const columnaSeleccionada =
+                      modoMultiple &&
+                      trabajadoresGrilla.length > 0 &&
+                      trabajadoresGrilla.every((asig) =>
+                        seleccionadas.has(`${asig.trabajadorId}-${d}`)
+                      );
 
                     return (
                       <th
@@ -635,7 +927,20 @@ export default function Asistencia() {
                         }`}
                         title={fechaISO}
                       >
-                        {d}
+                        <button
+                          type="button"
+                          disabled={!modoMultiple}
+                          onClick={() => seleccionarColumna(d)}
+                          className={`h-7 w-7 rounded-lg transition ${
+                            modoMultiple
+                              ? columnaSeleccionada
+                                ? "bg-[#4E1743] text-white"
+                                : "hover:bg-[#4E1743]/10"
+                              : ""
+                          }`}
+                        >
+                          {d}
+                        </button>
                       </th>
                     );
                   })}
@@ -652,14 +957,18 @@ export default function Asistencia() {
 
               <tbody>
                 {trabajadoresGrilla.map((asig) => {
-                  const totales = totalesPorTrabajador.get(
-                    asig.trabajadorId
-                  ) ?? {
+                  const totales = totalesPorTrabajador.get(asig.trabajadorId) ?? {
                     asistio: 0,
                     libre: 0,
                     falta: 0,
                     horasExtras: 0,
                   };
+
+                  const filaSeleccionada =
+                    modoMultiple &&
+                    dias.every((d) =>
+                      seleccionadas.has(`${asig.trabajadorId}-${d}`)
+                    );
 
                   return (
                     <tr
@@ -667,14 +976,27 @@ export default function Asistencia() {
                       className="border-b transition hover:bg-slate-50/50 last:border-none"
                     >
                       <td className="sticky left-0 z-10 min-w-[180px] bg-white px-4 py-2">
-                        <p className="font-black leading-tight text-slate-900">
-                          {asig.Trabajador.apellido},{" "}
-                          {asig.Trabajador.nombre}
-                        </p>
+                        <button
+                          type="button"
+                          disabled={!modoMultiple}
+                          onClick={() => seleccionarFila(asig)}
+                          className={`w-full rounded-xl p-1 text-left transition ${
+                            modoMultiple
+                              ? filaSeleccionada
+                                ? "bg-[#4E1743]/10"
+                                : "hover:bg-slate-100"
+                              : ""
+                          }`}
+                        >
+                          <p className="font-black leading-tight text-slate-900">
+                            {asig.Trabajador.apellido},{" "}
+                            {asig.Trabajador.nombre}
+                          </p>
 
-                        <p className="text-[10px] text-slate-400">
-                          {asig.Trabajador.rut}
-                        </p>
+                          <p className="text-[10px] text-slate-400">
+                            {asig.Trabajador.rut}
+                          </p>
+                        </button>
                       </td>
 
                       <td className="sticky left-[180px] z-10 min-w-[120px] bg-white px-3 py-2 font-semibold text-slate-600">
@@ -686,9 +1008,19 @@ export default function Asistencia() {
                           `${asig.trabajadorId}-${d}`
                         );
 
-                        const cfg = registro
-                          ? ESTADO_CONFIG[registro.estado]
+                        const estadoVisible = obtenerEstadoVisible(
+                          registro,
+                          año,
+                          mes,
+                          d
+                        );
+
+                        const cfg = estadoVisible
+                          ? ESTADO_CONFIG[estadoVisible]
                           : null;
+
+                        const key = `${asig.trabajadorId}-${d}`;
+                        const seleccionada = seleccionadas.has(key);
 
                         return (
                           <td key={d} className="px-0.5 py-1 text-center">
@@ -698,7 +1030,11 @@ export default function Asistencia() {
                                 abrirCelda(asig, d, registro ?? null)
                               }
                               title={
-                                registro
+                                modoMultiple
+                                  ? seleccionada
+                                    ? "Seleccionada"
+                                    : "Clic para seleccionar"
+                                  : registro
                                   ? `${registro.estado}${
                                       registro.horasExtras > 0
                                         ? ` +${registro.horasExtras}h`
@@ -708,23 +1044,29 @@ export default function Asistencia() {
                                         ? ` · ${registro.observacion}`
                                         : ""
                                     }`
+                                  : estadoVisible === "L"
+                                  ? "Libre por defecto — clic para editar"
                                   : "Sin registro — clic para agregar"
                               }
-                              className={`flex h-8 w-8 flex-col items-center justify-center rounded-lg transition hover:ring-2 hover:ring-[#4E1743]/30 ${
-                                cfg
+                              className={`relative flex h-8 w-8 flex-col items-center justify-center rounded-lg transition hover:ring-2 hover:ring-[#4E1743]/30 ${
+                                seleccionada
+                                  ? "bg-[#4E1743] text-white ring-2 ring-[#4E1743]/40"
+                                  : cfg
                                   ? `${cfg.bg} ${cfg.text}`
                                   : "bg-white text-slate-300 hover:bg-slate-100"
                               }`}
                             >
                               <span className="font-black leading-none">
-                                {cfg ? cfg.label : "·"}
+                                {seleccionada ? "✓" : cfg ? cfg.label : "·"}
                               </span>
 
-                              {registro && registro.horasExtras > 0 && (
-                                <span className="text-[8px] font-bold leading-none opacity-70">
-                                  +{registro.horasExtras}
-                                </span>
-                              )}
+                              {!seleccionada &&
+                                registro &&
+                                registro.horasExtras > 0 && (
+                                  <span className="text-[8px] font-bold leading-none opacity-70">
+                                    +{registro.horasExtras}
+                                  </span>
+                                )}
                             </button>
                           </td>
                         );
@@ -764,12 +1106,181 @@ export default function Asistencia() {
         }
         fecha={celdaFecha}
         form={celdaForm}
+        incidenciaForm={incidenciaForm}
         esEdicion={!!celdaRegistro}
         onClose={() => setModalOpen(false)}
         onChange={handleCeldaChange}
+        onIncidenciaChange={handleIncidenciaChange}
         onSubmit={handleGuardar}
         onEliminar={handleEliminar}
       />
+
+      {bulkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="font-bold text-[#4E1743]">
+                  Aplicar asistencia masiva
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {seleccionadasCount} celdas seleccionadas
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setBulkModalOpen(false)}
+                className="rounded-lg px-3 py-1 text-xl font-bold text-slate-500 hover:bg-slate-100"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-5">
+                <p className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
+                  Estado
+                </p>
+
+                <div className="flex gap-3">
+                  {(["A", "L", "F"] as const).map((estado) => (
+                    <button
+                      key={estado}
+                      type="button"
+                      onClick={() =>
+                        setBulkForm((prev) => ({ ...prev, estado }))
+                      }
+                      className={`flex-1 rounded-xl py-3 font-black transition ${
+                        bulkForm.estado === estado
+                          ? estado === "A"
+                            ? "scale-105 bg-green-500 text-white shadow-md"
+                            : estado === "L"
+                            ? "scale-105 bg-slate-400 text-white shadow-md"
+                            : "scale-105 bg-red-500 text-white shadow-md"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {estado}
+                      <span className="block text-xs font-semibold opacity-80">
+                        {estado === "A"
+                          ? "Asistió"
+                          : estado === "L"
+                          ? "Libre"
+                          : "Falta"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <p className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
+                  Horas extras
+                </p>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBulkForm((prev) => ({
+                        ...prev,
+                        horasExtras: Math.max(0, prev.horasExtras - 0.5),
+                      }))
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl font-black hover:bg-slate-200"
+                  >
+                    −
+                  </button>
+
+                  <span className="flex-1 rounded-xl border border-slate-200 py-2 text-center text-2xl font-black text-slate-900">
+                    {bulkForm.horasExtras}h
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBulkForm((prev) => ({
+                        ...prev,
+                        horasExtras: Math.min(12, prev.horasExtras + 0.5),
+                      }))
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl font-black hover:bg-slate-200"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <p className="mb-3 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
+                  Turno
+                </p>
+
+                <div className="flex gap-3">
+                  {(["diurno", "nocturno"] as const).map((turno) => (
+                    <button
+                      key={turno}
+                      type="button"
+                      onClick={() =>
+                        setBulkForm((prev) => ({ ...prev, turno }))
+                      }
+                      className={`flex-1 rounded-xl py-3 font-bold capitalize transition ${
+                        bulkForm.turno === turno
+                          ? "bg-[#4E1743] text-white shadow-md"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {turno}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <p className="mb-2 text-sm font-bold uppercase tracking-wide text-[#4E1743]">
+                  Observación{" "}
+                  <span className="font-normal normal-case text-slate-400">
+                    (opcional)
+                  </span>
+                </p>
+
+                <input
+                  type="text"
+                  value={bulkForm.observacion}
+                  onChange={(e) =>
+                    setBulkForm((prev) => ({
+                      ...prev,
+                      observacion: e.target.value,
+                    }))
+                  }
+                  placeholder="Ej: carga masiva del mes"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#4E1743] focus:ring-2 focus:ring-[#4E1743]/20"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkModalOpen(false)}
+                  className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGuardarMasivo}
+                  disabled={loading}
+                  className="flex-1 rounded-xl bg-[#4E1743] px-4 py-3 font-bold text-white hover:bg-[#3d1235] disabled:opacity-60"
+                >
+                  {loading ? "Guardando..." : "Aplicar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

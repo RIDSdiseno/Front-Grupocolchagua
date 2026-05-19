@@ -1,24 +1,15 @@
-import axios from "axios";
+import api from "./api";
 import type { SucursalForm } from "../types/sucursal";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 export const listarSucursalesPorEmpresaRequest = async (
   empresaId: number,
   holdingId?: number
 ) => {
-  const response = await axios.get(
-    `${API_URL}/sucursales/empresa/${empresaId}`,
+  const response = await api.get(
+    `/sucursales/empresa/${empresaId}`,
     {
-      headers: getAuthHeaders(),
+      
       params: holdingId ? { holdingId } : {},
     }
   );
@@ -27,8 +18,8 @@ export const listarSucursalesPorEmpresaRequest = async (
 };
 
 export const listarTodasSucursalesRequest = async () => {
-  const response = await axios.get(`${API_URL}/sucursales`, {
-    headers: getAuthHeaders(),
+  const response = await api.get(`/sucursales`, {
+    
   });
 
   return response.data.sucursales;
@@ -38,11 +29,11 @@ export const crearSucursalRequest = async (
   empresaId: number,
   data: SucursalForm
 ) => {
-  const response = await axios.post(
-    `${API_URL}/sucursales/empresa/${empresaId}`,
+  const response = await api.post(
+    `/sucursales/empresa/${empresaId}`,
     data,
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -53,16 +44,16 @@ export const actualizarSucursalRequest = async (
   id: number,
   data: Partial<SucursalForm> & { activo?: boolean }
 ) => {
-  const response = await axios.put(`${API_URL}/sucursales/${id}`, data, {
-    headers: getAuthHeaders(),
+  const response = await api.put(`/sucursales/${id}`, data, {
+    
   });
 
   return response.data;
 };
 
 export const eliminarSucursalRequest = async (id: number) => {
-  const response = await axios.delete(`${API_URL}/sucursales/${id}`, {
-    headers: getAuthHeaders(),
+  const response = await api.delete(`/sucursales/${id}`, {
+    
   });
 
   return response.data;

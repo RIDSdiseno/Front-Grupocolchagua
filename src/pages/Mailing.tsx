@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AxiosError } from "axios";
 import DashboardLayout from "../layouts/DashboardLayout";
+import CorreoNormalEditor from "../components/mailing/CorreoNormalEditor";
+import HtmlAvanzadoEditor from "../components/mailing/HtmlAvanzadoEditor";
+import MailingPreview from "../components/mailing/MailingPreview";
+import PlantillasCorreo, {
+  type PlantillaCorreo,
+} from "../components/mailing/PlantillasCorreo";
+import SelectorModoEditor from "../components/mailing/SelectorModoEditor";
+import {
+  generarHtmlFinal,
+  limpiarHtml,
+  type ModoEditor,
+} from "../utils/mailingHtml";
 import {
   crearCampanaRequest,
   eliminarCampanaRequest,
@@ -9,7 +22,10 @@ import {
 import type { MailingCampana } from "../types/mailing";
 
 type Tab = "campanas" | "nueva";
-type ModoEditor = "normal" | "html";
+
+interface ApiErrorResponse {
+  message?: string;
+}
 
 const gruposDestinatarios = [
   "Todos los trabajadores",
@@ -45,7 +61,7 @@ const estadoCampanaConfig: Record<
   },
 };
 
-const plantillas = [
+const plantillas: PlantillaCorreo[] = [
   {
     nombre: "Bienvenida",
     asunto: "¡Bienvenido/a a Grupo Colchagua!",
@@ -79,55 +95,6 @@ const plantillas = [
   },
 ];
 
-const escaparHtml = (texto: string) =>
-  texto
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br />");
-
-const envolverHtmlCorreo = (contenido: string) => {
-  const contenidoLimpio = contenido.trim();
-
-  const yaEsHtmlCompleto =
-    contenidoLimpio.includes("<table") ||
-    contenidoLimpio.includes("<html") ||
-    contenidoLimpio.includes("<body");
-
-  if (yaEsHtmlCompleto) return contenidoLimpio;
-
-  return `
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px;font-family:Arial,Helvetica,sans-serif;">
-      <tr>
-        <td align="center">
-          <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;">
-            <tr>
-              <td style="background:#4E1743;padding:24px;color:#ffffff;">
-                <h1 style="margin:0;font-size:22px;">Grupo Colchagua</h1>
-                <p style="margin:6px 0 0;font-size:13px;">Comunicaciones internas</p>
-              </td>
-            </tr>
-
-            <tr>
-              <td style="padding:28px;color:#334155;font-size:15px;line-height:1.65;">
-                ${contenidoLimpio}
-              </td>
-            </tr>
-
-            <tr>
-              <td style="background:#f8fafc;padding:16px 28px;color:#64748b;font-size:12px;text-align:center;">
-                Este correo fue enviado desde administrador@grupocolchagua.cl
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  `;
-};
-
-const limpiarHtml = (html: string) => html.trim();
-
 export default function Mailing() {
   const [campanas, setCampanas] = useState<MailingCampana[]>([]);
   const [tab, setTab] = useState<Tab>("campanas");
@@ -142,17 +109,14 @@ export default function Mailing() {
   const [programar, setProgramar] = useState(false);
   const [fechaProgramada, setFechaProgramada] = useState("");
   const [modoEditor, setModoEditor] = useState<ModoEditor>("normal");
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState<File[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [enviandoId, setEnviandoId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const htmlFinal = useMemo(() => {
-    if (modoEditor === "normal") {
-      return envolverHtmlCorreo(escaparHtml(cuerpoHtml));
-    }
-
-    return envolverHtmlCorreo(cuerpoHtml);
+    return generarHtmlFinal(cuerpoHtml, modoEditor);
   }, [cuerpoHtml, modoEditor]);
 
   const cargarCampanas = useCallback(async () => {
@@ -162,9 +126,11 @@ export default function Mailing() {
 
       const data = await listarCampanasRequest();
       setCampanas(data);
-    } catch (err: any) {
+    } catch (err) {
+      const error = err as AxiosError<ApiErrorResponse>;
+
       setError(
-        err?.response?.data?.message || "No se pudieron cargar las campañas."
+        error.response?.data?.message || "No se pudieron cargar las campañas."
       );
     } finally {
       setLoading(false);
@@ -172,8 +138,26 @@ export default function Mailing() {
   }, []);
 
   useEffect(() => {
-    void cargarCampanas();
+    const timer = window.setTimeout(() => {
+      void cargarCampanas();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [cargarCampanas]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (tab === "campanas") {
+        void cargarCampanas();
+      }
+    }, 15000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [cargarCampanas, tab]);
 
   const resetForm = () => {
     setAsunto("");
@@ -183,35 +167,13 @@ export default function Mailing() {
     setProgramar(false);
     setFechaProgramada("");
     setModoEditor("normal");
+    setArchivosAdjuntos([]);
   };
 
-  const cargarPlantilla = (plantilla: (typeof plantillas)[0]) => {
+  const cargarPlantilla = (plantilla: PlantillaCorreo) => {
     setAsunto(plantilla.asunto);
     setCuerpoHtml(limpiarHtml(plantilla.html));
     setModoEditor("html");
-  };
-
-  const insertarHtml = (antes: string, despues = "") => {
-    const textarea = document.getElementById(
-      "mail-editor-html"
-    ) as HTMLTextAreaElement | null;
-
-    if (!textarea) {
-      setCuerpoHtml((prev) => `${prev}${antes}${despues}`);
-      return;
-    }
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = cuerpoHtml.substring(start, end);
-
-    setCuerpoHtml(
-      cuerpoHtml.substring(0, start) +
-        antes +
-        selected +
-        despues +
-        cuerpoHtml.substring(end)
-    );
   };
 
   const guardarCampana = async (enviarAhora: boolean) => {
@@ -236,6 +198,7 @@ export default function Mailing() {
         emailsPersonalizados:
           grupo === "Personalizado" ? emailsPersonalizados : undefined,
         fechaProgramada: programar ? fechaProgramada : null,
+        archivos: archivosAdjuntos,
       });
 
       if (enviarAhora && response.campana?.id) {
@@ -245,10 +208,10 @@ export default function Mailing() {
       resetForm();
       setTab("campanas");
       await cargarCampanas();
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message || "No se pudo guardar la campaña."
-      );
+    } catch (err) {
+      const error = err as AxiosError<ApiErrorResponse>;
+
+      setError(error.response?.data?.message || "No se pudo guardar la campaña.");
     } finally {
       setLoading(false);
     }
@@ -264,8 +227,10 @@ export default function Mailing() {
       setConfirmarEnvio(null);
       setModalVer(null);
       await cargarCampanas();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || "No se pudo enviar la campaña.");
+    } catch (err) {
+      const error = err as AxiosError<ApiErrorResponse>;
+
+      setError(error.response?.data?.message || "No se pudo enviar la campaña.");
     } finally {
       setEnviandoId(null);
     }
@@ -282,10 +247,10 @@ export default function Mailing() {
 
       if (modalVer?.id === id) setModalVer(null);
       await cargarCampanas();
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message || "No se pudo eliminar la campaña."
-      );
+    } catch (err) {
+      const error = err as AxiosError<ApiErrorResponse>;
+
+      setError(error.response?.data?.message || "No se pudo eliminar la campaña.");
     } finally {
       setLoading(false);
     }
@@ -462,17 +427,15 @@ export default function Mailing() {
                                 Ver
                               </button>
 
-                              {c.estado !== "ENVIADA" && (
-                                <button
-                                  onClick={() => setConfirmarEnvio(c)}
-                                  disabled={enviandoId === c.id}
-                                  className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-600 hover:text-white disabled:opacity-60"
-                                >
-                                  {enviandoId === c.id
-                                    ? "Enviando..."
-                                    : "Enviar"}
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setConfirmarEnvio(c)}
+                                disabled={enviandoId === c.id}
+                                className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-600 hover:text-white disabled:opacity-60"
+                              >
+                                {enviandoId === c.id
+                                  ? "Enviando..."
+                                  : "Enviar"}
+                              </button>
 
                               <button
                                 onClick={() => eliminar(c.id)}
@@ -495,23 +458,10 @@ export default function Mailing() {
         {tab === "nueva" && (
           <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div>
-                <p className="mb-2 text-sm font-semibold text-slate-600">
-                  Plantillas rápidas
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {plantillas.map((p) => (
-                    <button
-                      key={p.nombre}
-                      onClick={() => cargarPlantilla(p)}
-                      className="rounded-full border border-[#4E1743]/30 px-3 py-1.5 text-xs font-medium text-[#4E1743] transition hover:bg-[#4E1743] hover:text-white"
-                    >
-                      {p.nombre}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <PlantillasCorreo
+                plantillas={plantillas}
+                onSeleccionar={cargarPlantilla}
+              />
 
               <div className="h-px bg-slate-100" />
 
@@ -572,117 +522,26 @@ export default function Mailing() {
                     Contenido del correo *
                   </label>
 
-                  <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setModoEditor("normal")}
-                      className={`rounded-md px-3 py-1 text-xs font-semibold ${
-                        modoEditor === "normal"
-                          ? "bg-white text-[#4E1743] shadow-sm"
-                          : "text-slate-500"
-                      }`}
-                    >
-                      Correo normal
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setModoEditor("html")}
-                      className={`rounded-md px-3 py-1 text-xs font-semibold ${
-                        modoEditor === "html"
-                          ? "bg-white text-[#4E1743] shadow-sm"
-                          : "text-slate-500"
-                      }`}
-                    >
-                      HTML avanzado
-                    </button>
-                  </div>
+                  <SelectorModoEditor
+                    modoEditor={modoEditor}
+                    onChange={setModoEditor}
+                  />
                 </div>
 
                 {modoEditor === "normal" ? (
-                  <textarea
+                  <CorreoNormalEditor
                     value={cuerpoHtml}
-                    onChange={(e) => setCuerpoHtml(e.target.value)}
-                    rows={12}
-                    placeholder="Escribe el mensaje del correo..."
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-[#4E1743] focus:outline-none focus:ring-2 focus:ring-[#4E1743]/20"
+                    onChange={setCuerpoHtml}
+                    archivos={archivosAdjuntos}
+                    onArchivosChange={setArchivosAdjuntos}
                   />
                 ) : (
-                  <>
-                    <div className="mb-2 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-                      <button
-                        type="button"
-                        onClick={() => insertarHtml("<strong>", "</strong>")}
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-100"
-                      >
-                        Negrita
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => insertarHtml("<em>", "</em>")}
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium italic text-slate-700 shadow-sm hover:bg-slate-100"
-                      >
-                        Cursiva
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => insertarHtml("<u>", "</u>")}
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 underline shadow-sm hover:bg-slate-100"
-                      >
-                        Subrayado
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          insertarHtml(
-                            '<a href="https://grupocolchagua.cl" style="color:#4E1743;font-weight:bold;">',
-                            "</a>"
-                          )
-                        }
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-100"
-                      >
-                        Link
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          insertarHtml(
-                            '<a href="https://grupocolchagua.cl" style="display:inline-block;background:#4E1743;color:white;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:bold;">',
-                            "</a>"
-                          )
-                        }
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-100"
-                      >
-                        Botón
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          insertarHtml(
-                            '<ul style="padding-left:20px;margin:12px 0;"><li>',
-                            "</li></ul>"
-                          )
-                        }
-                        className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-100"
-                      >
-                        Lista
-                      </button>
-                    </div>
-
-                    <textarea
-                      id="mail-editor-html"
-                      value={cuerpoHtml}
-                      onChange={(e) => setCuerpoHtml(e.target.value)}
-                      rows={14}
-                      placeholder="Pega o escribe el HTML completo del correo..."
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 font-mono text-sm focus:border-[#4E1743] focus:outline-none focus:ring-2 focus:ring-[#4E1743]/20"
-                    />
-                  </>
+                  <HtmlAvanzadoEditor
+                    value={cuerpoHtml}
+                    onChange={setCuerpoHtml}
+                    archivos={archivosAdjuntos}
+                    onArchivosChange={setArchivosAdjuntos}
+                  />
                 )}
 
                 <p className="mt-1 text-right text-xs text-slate-400">
@@ -745,39 +604,11 @@ export default function Mailing() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3">
-                <p className="text-sm font-bold text-slate-700">
-                  Vista previa tipo Outlook
-                </p>
-                <p className="text-xs text-slate-400">
-                  Así se verá el contenido base del correo.
-                </p>
-              </div>
-
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                <div className="border-b border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs text-slate-400">De</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    Grupo Colchagua &lt;administrador@grupocolchagua.cl&gt;
-                  </p>
-
-                  <p className="mt-2 text-xs text-slate-400">Para</p>
-                  <p className="text-sm text-slate-700">{grupo}</p>
-
-                  <p className="mt-2 text-xs text-slate-400">Asunto</p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {asunto || "(Sin asunto)"}
-                  </p>
-                </div>
-
-                <iframe
-                  title="preview-correo"
-                  srcDoc={htmlFinal}
-                  className="h-[720px] w-full bg-white"
-                />
-              </div>
-            </div>
+            <MailingPreview
+              htmlFinal={htmlFinal}
+              asunto={asunto}
+              grupo={grupo}
+            />
           </div>
         )}
       </div>
@@ -826,14 +657,13 @@ export default function Mailing() {
             </p>
 
             <div className="flex justify-end gap-3">
-              {modalVer.estado !== "ENVIADA" && (
-                <button
-                  onClick={() => setConfirmarEnvio(modalVer)}
-                  className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  Enviar ahora
-                </button>
-              )}
+              <button
+                onClick={() => setConfirmarEnvio(modalVer)}
+                disabled={enviandoId === modalVer.id}
+                className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {enviandoId === modalVer.id ? "Enviando..." : "Enviar ahora"}
+              </button>
 
               <button
                 onClick={() => setModalVer(null)}

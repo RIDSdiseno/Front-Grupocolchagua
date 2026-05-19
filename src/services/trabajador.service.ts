@@ -1,15 +1,5 @@
-import axios from "axios";
+import api from "./api";
 import type { TrabajadorForm } from "../types/trabajador";
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 export interface FiltrosTrabajadores {
   activo?: boolean;
@@ -21,8 +11,8 @@ export interface FiltrosTrabajadores {
 export const listarTrabajadoresRequest = async (
   filtros?: FiltrosTrabajadores
 ) => {
-  const response = await axios.get(`${API_URL}/trabajadores`, {
-    headers: getAuthHeaders(),
+  const response = await api.get(`/trabajadores`, {
+    
     params: filtros,
   });
 
@@ -30,16 +20,16 @@ export const listarTrabajadoresRequest = async (
 };
 
 export const obtenerTrabajadorRequest = async (id: number) => {
-  const response = await axios.get(`${API_URL}/trabajadores/${id}`, {
-    headers: getAuthHeaders(),
+  const response = await api.get(`/trabajadores/${id}`, {
+    
   });
 
   return response.data.trabajador;
 };
 
 export const crearTrabajadorRequest = async (data: TrabajadorForm) => {
-  const response = await axios.post(`${API_URL}/trabajadores`, data, {
-    headers: getAuthHeaders(),
+  const response = await api.post(`/trabajadores`, data, {
+    
   });
 
   return response.data;
@@ -49,11 +39,11 @@ export const actualizarTrabajadorRequest = async (
   id: number,
   data: Partial<TrabajadorForm>
 ) => {
-  const response = await axios.put(
-    `${API_URL}/trabajadores/${id}`,
+  const response = await api.put(
+    `/trabajadores/${id}`,
     data,
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -61,10 +51,10 @@ export const actualizarTrabajadorRequest = async (
 };
 
 export const eliminarTrabajadorRequest = async (id: number) => {
-  const response = await axios.delete(
-    `${API_URL}/trabajadores/${id}`,
+  const response = await api.delete(
+    `/trabajadores/${id}`,
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 

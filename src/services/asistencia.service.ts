@@ -1,15 +1,5 @@
-import axios from "axios";
+import api from "./api";
 import type { AsistenciaForm } from "../types/asistencia";
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 export interface FiltrosAsistencia {
   holdingId?: number;
@@ -19,6 +9,22 @@ export interface FiltrosAsistencia {
   año: number;
 }
 
+export interface RegistrarAsistenciaPayload {
+  trabajadorId: number;
+  fecha: string;
+  estado: string;
+  horasExtras: number;
+  turno: string;
+  cargoId: number;
+  empresaId: number;
+  sucursalId?: number | null;
+  observacion?: string;
+}
+
+export interface RegistrarAsistenciaMasivaPayload {
+  registros: RegistrarAsistenciaPayload[];
+}
+
 export const listarAsistenciaRequest = async ({
   holdingId,
   empresaId,
@@ -26,8 +32,7 @@ export const listarAsistenciaRequest = async ({
   mes,
   año,
 }: FiltrosAsistencia) => {
-  const response = await axios.get(`${API_URL}/asistencia`, {
-    headers: getAuthHeaders(),
+  const response = await api.get("/asistencia", {
     params: {
       holdingId,
       empresaId,
@@ -40,21 +45,22 @@ export const listarAsistenciaRequest = async ({
   return response.data.registros;
 };
 
-export const registrarAsistenciaRequest = async (data: {
-  trabajadorId: number;
-  fecha: string;
-  estado: string;
-  horasExtras: number;
-  turno: string;
-  cargoId: number;
-  empresaId: number;
-  sucursalId?: number | null;
-  observacion?: string;
-}) => {
-  const response = await axios.post(`${API_URL}/asistencia`, data, {
-    headers: getAuthHeaders(),
-  });
+export const registrarAsistenciaRequest = async (
+  data: RegistrarAsistenciaPayload
+) => {
+  const response = await api.post("/asistencia", data);
+  return response.data;
+};
 
+export const registrarAsistenciaMasivaRequest = async (
+  data: RegistrarAsistenciaMasivaPayload
+): Promise<{
+  ok: boolean;
+  message: string;
+  procesados: number;
+  errores: string[];
+}> => {
+  const response = await api.post("/asistencia/bulk", data);
   return response.data;
 };
 
@@ -62,18 +68,12 @@ export const actualizarAsistenciaRequest = async (
   id: number,
   data: Partial<AsistenciaForm>
 ) => {
-  const response = await axios.put(`${API_URL}/asistencia/${id}`, data, {
-    headers: getAuthHeaders(),
-  });
-
+  const response = await api.put(`/asistencia/${id}`, data);
   return response.data;
 };
 
 export const eliminarAsistenciaRequest = async (id: number) => {
-  const response = await axios.delete(`${API_URL}/asistencia/${id}`, {
-    headers: getAuthHeaders(),
-  });
-
+  const response = await api.delete(`/asistencia/${id}`);
   return response.data;
 };
 
@@ -84,8 +84,7 @@ export const resumenAsistenciaRequest = async ({
   mes,
   año,
 }: FiltrosAsistencia) => {
-  const response = await axios.get(`${API_URL}/asistencia/resumen`, {
-    headers: getAuthHeaders(),
+  const response = await api.get("/asistencia/resumen", {
     params: {
       holdingId,
       empresaId,

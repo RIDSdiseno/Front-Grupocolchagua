@@ -1,15 +1,5 @@
-import axios from "axios";
+import api from "./api";
 import type { AsignacionForm } from "../types/asignacion";
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 export interface FiltrosAsignacion {
   empresaId?: number;
@@ -20,8 +10,7 @@ export interface FiltrosAsignacion {
 export const listarAsignacionesRequest = async (
   filtros?: FiltrosAsignacion
 ) => {
-  const response = await axios.get(`${API_URL}/asignaciones`, {
-    headers: getAuthHeaders(),
+  const response = await api.get("/asignaciones", {
     params: filtros,
   });
 
@@ -38,9 +27,7 @@ export const crearAsignacionRequest = async (data: AsignacionForm) => {
     fechaFin: data.fechaFin || null,
   };
 
-  const response = await axios.post(`${API_URL}/asignaciones`, payload, {
-    headers: getAuthHeaders(),
-  });
+  const response = await api.post("/asignaciones", payload);
 
   return response.data;
 };
@@ -55,21 +42,13 @@ export const actualizarAsignacionRequest = async (
     fechaFin: data.fechaFin || null,
   };
 
-  const response = await axios.put(
-    `${API_URL}/asignaciones/${id}`,
-    payload,
-    {
-      headers: getAuthHeaders(),
-    }
-  );
+  const response = await api.put(`/asignaciones/${id}`, payload);
 
   return response.data;
 };
 
 export const eliminarAsignacionRequest = async (id: number) => {
-  const response = await axios.delete(`${API_URL}/asignaciones/${id}`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await api.delete(`/asignaciones/${id}`);
 
   return response.data;
 };

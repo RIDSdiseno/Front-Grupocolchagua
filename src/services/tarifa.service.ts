@@ -1,21 +1,11 @@
-import axios from "axios";
+import api from "./api";
 import type { TarifaForm } from "../types/tarifa";
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 const toNumber = (value: string) => Number(value || 0);
 
 export const listarTarifasPorEmpresaRequest = async (empresaId: number) => {
-  const response = await axios.get(`${API_URL}/tarifas/empresa/${empresaId}`, {
-    headers: getAuthHeaders(),
+  const response = await api.get(`/tarifas/empresa/${empresaId}`, {
+    
   });
 
   return response.data.tarifas;
@@ -25,8 +15,8 @@ export const crearTarifaEmpresaRequest = async (
   empresaId: number,
   data: TarifaForm
 ) => {
-  const response = await axios.post(
-    `${API_URL}/tarifas/empresa/${empresaId}`,
+  const response = await api.post(
+    `/tarifas/empresa/${empresaId}`,
     {
       sucursalId: data.sucursalId,
       cargoId: data.cargoId,
@@ -40,7 +30,7 @@ export const crearTarifaEmpresaRequest = async (
       valorHoraExtra: toNumber(data.valorHoraExtra),
     },
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -51,8 +41,8 @@ export const actualizarTarifaRequest = async (
   id: number,
   data: TarifaForm
 ) => {
-  const response = await axios.put(
-    `${API_URL}/tarifas/${id}`,
+  const response = await api.put(
+    `/tarifas/${id}`,
     {
       sucursalId: data.sucursalId,
       cargoId: data.cargoId,
@@ -66,7 +56,7 @@ export const actualizarTarifaRequest = async (
       valorHoraExtra: toNumber(data.valorHoraExtra),
     },
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -74,8 +64,8 @@ export const actualizarTarifaRequest = async (
 };
 
 export const eliminarTarifaRequest = async (id: number) => {
-  const response = await axios.delete(`${API_URL}/tarifas/${id}`, {
-    headers: getAuthHeaders(),
+  const response = await api.delete(`/tarifas/${id}`, {
+    
   });
 
   return response.data;

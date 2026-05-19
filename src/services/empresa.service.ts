@@ -1,21 +1,8 @@
-import axios from "axios";
+import api from "./api";
 import type { EmpresaForm } from "../types/empresa";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
-
 export const listarEmpresasRequest = async () => {
-  const response = await axios.get(`${API_URL}/empresas`, {
-    headers: getAuthHeaders(),
-  });
-
+  const response = await api.get("/empresas");
   return response.data.empresas;
 };
 
@@ -26,31 +13,23 @@ export const crearEmpresaRequest = async (data: EmpresaForm) => {
   formData.append("alias", data.alias);
   formData.append("rut", data.rut);
 
-  // holdings
   data.holdingIds.forEach((id) => {
     formData.append("holdingIds", String(id));
   });
 
-  // contacto encargado
   formData.append("encargadoNombre", data.encargadoNombre || "");
   formData.append("encargadoCorreo", data.encargadoCorreo || "");
   formData.append("encargadoTelefono", data.encargadoTelefono || "");
 
-  // logo
   if (data.foto) {
     formData.append("foto", data.foto);
   }
 
-  const response = await axios.post(
-    `${API_URL}/empresas`,
-    formData,
-    {
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
+  const response = await api.post("/empresas", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
   return response.data;
 };
@@ -65,42 +44,28 @@ export const actualizarEmpresaRequest = async (
   formData.append("alias", data.alias);
   formData.append("rut", data.rut);
 
-  // holdings
   data.holdingIds.forEach((holdingId) => {
     formData.append("holdingIds", String(holdingId));
   });
 
-  // contacto encargado
   formData.append("encargadoNombre", data.encargadoNombre || "");
   formData.append("encargadoCorreo", data.encargadoCorreo || "");
   formData.append("encargadoTelefono", data.encargadoTelefono || "");
 
-  // logo
   if (data.foto) {
     formData.append("foto", data.foto);
   }
 
-  const response = await axios.put(
-    `${API_URL}/empresas/${id}`,
-    formData,
-    {
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
+  const response = await api.put(`/empresas/${id}`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
   return response.data;
 };
 
 export const eliminarEmpresaRequest = async (id: number) => {
-  const response = await axios.delete(
-    `${API_URL}/empresas/${id}`,
-    {
-      headers: getAuthHeaders(),
-    }
-  );
-
+  const response = await api.delete(`/empresas/${id}`);
   return response.data;
 };

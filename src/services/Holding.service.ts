@@ -1,14 +1,5 @@
-import axios from "axios";
+import api from "./api";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-};
 
 export interface Holding {
   id: number;
@@ -54,8 +45,8 @@ export interface HoldingDetalle extends Holding {
 }
 
 export const listarHoldingsRequest = async (): Promise<Holding[]> => {
-  const res = await axios.get(`${API_URL}/holdings`, {
-    headers: getAuthHeaders(),
+  const res = await api.get(`/holdings`, {
+    
   });
 
   return res.data.holdings;
@@ -64,8 +55,8 @@ export const listarHoldingsRequest = async (): Promise<Holding[]> => {
 export const obtenerHoldingRequest = async (
   id: number
 ): Promise<HoldingDetalle> => {
-  const res = await axios.get(`${API_URL}/holdings/${id}`, {
-    headers: getAuthHeaders(),
+  const res = await api.get(`/holdings/${id}`, {
+    
   });
 
   return res.data.holding;
@@ -74,11 +65,11 @@ export const obtenerHoldingRequest = async (
 export const crearHoldingRequest = async (
   nombre: string
 ): Promise<Holding> => {
-  const res = await axios.post(
-    `${API_URL}/holdings`,
+  const res = await api.post(
+    `/holdings`,
     { nombre },
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -89,11 +80,11 @@ export const actualizarHoldingRequest = async (
   id: number,
   nombre: string
 ): Promise<Holding> => {
-  const res = await axios.put(
-    `${API_URL}/holdings/${id}`,
+  const res = await api.put(
+    `/holdings/${id}`,
     { nombre },
     {
-      headers: getAuthHeaders(),
+      
     }
   );
 
@@ -101,7 +92,7 @@ export const actualizarHoldingRequest = async (
 };
 
 export const eliminarHoldingRequest = async (id: number): Promise<void> => {
-  await axios.delete(`${API_URL}/holdings/${id}`, {
-    headers: getAuthHeaders(),
+  await api.delete(`/holdings/${id}`, {
+    
   });
 };

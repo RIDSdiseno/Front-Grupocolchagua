@@ -11,6 +11,7 @@ import Sucursales from "./pages/Sucursales";
 import Usuarios from "./pages/Usuarios";
 import Postulantes from "./pages/Postulantes";
 import Mailing from "./pages/Mailing";
+import PreLiquidaciones from "./pages/PreLiquidaciones";
 
 function App() {
   return (
@@ -73,6 +74,15 @@ function App() {
         />
 
         <Route
+          path="/preliquidaciones"
+          element={
+            <ProtectedRoute>
+              <PreLiquidaciones />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/sucursales"
           element={
             <ProtectedRoute>
@@ -108,6 +118,7 @@ function App() {
           }
         />
 
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
