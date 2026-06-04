@@ -12,6 +12,7 @@ import {
   UserSearch,
   Mail,
   UserCog,
+  ChevronRight,
 } from "lucide-react";
 
 interface Props {
@@ -21,18 +22,38 @@ interface Props {
 const logo =
   "https://res.cloudinary.com/dvqpmttci/image/upload/v1777584212/logocolchagua2_bbk1sv.png";
 
-const menuItems = [
-  { label: "Dashboard", path: "/dashboard", Icon: LayoutDashboard },
-  { label: "Trabajadores", path: "/trabajadores", Icon: Users },
-  { label: "Empresas", path: "/empresas", Icon: Building2 },
-  { label: "Sucursales", path: "/sucursales", Icon: MapPin },
-  { label: "Cargos", path: "/cargos", Icon: Briefcase },
-  { label: "Asignaciones", path: "/asignaciones", Icon: Link },
-  { label: "Asistencia", path: "/asistencia", Icon: ClipboardList },
-  { label: "Preliquidaciones", path: "/preliquidaciones", Icon: FileText },
-  { label: "Postulantes", path: "/postulantes", Icon: UserSearch },
-  { label: "Mailing", path: "/mailing", Icon: Mail },
-  { label: "Usuarios", path: "/usuarios", Icon: UserCog },
+const menuSections = [
+  {
+    title: "General",
+    items: [{ label: "Dashboard", path: "/dashboard", Icon: LayoutDashboard }],
+  },
+  {
+    title: "Gestión operacional",
+    items: [
+      { label: "Trabajadores", path: "/trabajadores", Icon: Users },
+      { label: "Empresas", path: "/empresas", Icon: Building2 },
+      { label: "Sucursales", path: "/sucursales", Icon: MapPin },
+      { label: "Cargos", path: "/cargos", Icon: Briefcase },
+      { label: "Asignaciones", path: "/asignaciones", Icon: Link },
+      { label: "Asistencia", path: "/asistencia", Icon: ClipboardList },
+      { label: "Preliquidaciones", path: "/preliquidaciones", Icon: FileText },
+    ],
+  },
+  {
+    title: "Reclutamiento",
+    items: [
+      { label: "Postulantes", path: "/postulantes", Icon: UserSearch },
+      { label: "Empleos", path: "/empleos", Icon: Briefcase },
+    ],
+  },
+  {
+    title: "Comunicaciones",
+    items: [{ label: "Mailing", path: "/mailing", Icon: Mail }],
+  },
+  {
+    title: "Administración",
+    items: [{ label: "Usuarios", path: "/usuarios", Icon: UserCog }],
+  },
 ];
 
 export default function DashboardLayout({ children }: Props) {
@@ -66,34 +87,50 @@ export default function DashboardLayout({ children }: Props) {
           />
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          {menuItems.map((item) => {
-            const activo = location.pathname === item.path;
+        <nav className="flex-1 space-y-5 overflow-y-auto p-4">
+          {menuSections.map((section) => (
+            <div key={section.title}>
+              <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-white/45">
+                {section.title}
+              </p>
 
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-semibold transition-all duration-200 ${
-                  activo
-                    ? "bg-white text-[#4E1743] shadow-md"
-                    : "text-white/90 hover:translate-x-1 hover:bg-white/10"
-                }`}
-              >
-                <item.Icon
-                  size={18}
-                  className={activo ? "text-[#4E1743]" : "text-white/70"}
-                />
-                {item.label}
-              </button>
-            );
-          })}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const activo = location.pathname === item.path;
+
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className={`group flex w-full items-center justify-between rounded-xl px-4 py-3 text-left font-semibold transition-all duration-200 ${
+                        activo
+                          ? "bg-white text-[#4E1743] shadow-md"
+                          : "text-white/90 hover:translate-x-1 hover:bg-white/10"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <item.Icon
+                          size={18}
+                          className={
+                            activo ? "text-[#4E1743]" : "text-white/70"
+                          }
+                        />
+                        {item.label}
+                      </span>
+
+                      {activo && <ChevronRight size={16} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-white/10 p-4">
           <div className="mb-4 rounded-xl bg-white/10 p-4">
             <p className="text-xs text-white/60">Sesión iniciada</p>
-            <p className="font-bold">{usuario.nombre || "Usuario"}</p>
+            <p className="truncate font-bold">{usuario.nombre || "Usuario"}</p>
             <p className="text-xs text-white/60">
               {usuario.rol || "Administrador"}
             </p>

@@ -12,6 +12,7 @@ import Usuarios from "./pages/Usuarios";
 import Postulantes from "./pages/Postulantes";
 import Mailing from "./pages/Mailing";
 import PreLiquidaciones from "./pages/PreLiquidaciones";
+import Empleos from "./pages/Empleos";
 
 function App() {
   return (
@@ -114,6 +115,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Mailing />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/empleos"
+          element={
+            <ProtectedRoute>
+              <Empleos />
             </ProtectedRoute>
           }
         />
