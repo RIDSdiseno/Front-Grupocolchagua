@@ -57,7 +57,7 @@ module.exports = (env, argv) => {
           { from: 'public', to: '.', noErrorOnMissing: true },
         ],
       }),
-      new Dotenv(),
+      new Dotenv({ systemvars: true }),
       ...(!isDev ? [new MiniCssExtractPlugin({ filename: '[name].[contenthash].css' })] : []),
     ],
     devServer: {
