@@ -13,6 +13,7 @@ import Postulantes from "./pages/Postulantes";
 import Mailing from "./pages/Mailing";
 import PreLiquidaciones from "./pages/PreLiquidaciones";
 import Empleos from "./pages/Empleos";
+import Talana from "./pages/Talana";
 
 function App() {
   return (
@@ -124,6 +125,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Empleos />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/talana"
+          element={
+            <ProtectedRoute>
+              <Talana />
             </ProtectedRoute>
           }
         />

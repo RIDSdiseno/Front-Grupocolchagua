@@ -13,6 +13,7 @@ import {
   Mail,
   UserCog,
   ChevronRight,
+  Database,
 } from "lucide-react";
 
 interface Props {
@@ -49,6 +50,10 @@ const menuSections = [
   {
     title: "Comunicaciones",
     items: [{ label: "Mailing", path: "/mailing", Icon: Mail }],
+  },
+  {
+    title: "Integraciones",
+    items: [{ label: "Talana", path: "/talana", Icon: Database }],
   },
   {
     title: "Administración",
